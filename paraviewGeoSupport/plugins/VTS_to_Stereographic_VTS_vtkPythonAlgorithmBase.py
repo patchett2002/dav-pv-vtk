@@ -190,46 +190,30 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         # to my longitude array and add a copy of the first
         # column of my latitude array to the end of the array
 
-
         # Add the first column of the latitude array to the end
         # of the latitude array
+        # y_dimension is ROWS
+        # x_dimension is COLUMNS
         latPoints=latPoints.reshape(y_dimension,x_dimension)
-        ALat = copy.deepcopy(latPoints[0:y_dimension,:])
-        BLat = copy.deepcopy(latPoints[0:y_dimension,0:1])
+        ALat = copy.deepcopy(latPoints)
+        BLat = copy.deepcopy(latPoints[:,0:1])
+        print("BLAT length: ", np.size(BLat), " : ", BLat )
         NewLatArray = np.hstack((ALat, BLat))
-
 
         latPoints=latPoints.reshape(y_dimension * x_dimension,)
         NewLatArray=NewLatArray.reshape(y_dimension * (x_dimension + 1),)
-
 
         # Add a column of 360 degrees to the end of my longitude
         # array
         #lonPoints=lonPoints.reshape(512,1024)
         lonPoints=lonPoints.reshape(y_dimension,x_dimension)
-        #ALon = lonPoints[0:512,:]
-        #ALon = copy.deepcopy(lonPoints[0:512,:])
-        ALon = copy.deepcopy(lonPoints[0:y_dimension,:])
-        #BLon = np.full((512, 1), 360.0)
-        #BLon = np.full((y_dimension, 1), 360.0)
-        BLon = np.full((y_dimension, 1), next_lon_value)
+        ALon = copy.deepcopy(lonPoints)
+        BLon = copy.deepcopy(lonPoints[:,0:1])
         NewLonArray = np.hstack((ALon, BLon))
 
-
-        #lonPoints=lonPoints.reshape(524288,)
         lonPoints=lonPoints.reshape(y_dimension * x_dimension,)
-        #NewLonArray=NewLonArray.reshape(524800,)
         NewLonArray=NewLonArray.reshape(y_dimension * (x_dimension + 1),)
 
-
-        # Check some of the points in the NewLonArray
-        #print(NewLonArray[1023])
-        #print(NewLonArray[1024])
-        print(NewLonArray[x_dimension])
-        #print(NewLonArray.shape)
-
-        #for i in range(0,numPoints):
-        #for i in range(0,524800):
         for i in range(0,y_dimension * (x_dimension + 1)):
             #mynewcoord = (lonPoints[i], latPoints[i], 0)
             mynewcoord = (NewLonArray[i], NewLatArray[i], 0)
@@ -257,14 +241,12 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
             nprawdat=nprawdat.reshape(y_dimension,x_dimension)
             nprawdat=nprawdat.reshape(y_dimension * x_dimension,)
 
-
             # Test out adding a new column to my rawdat array made up of
             # 512 ones to see if it messes up my code
             nprawdat=nprawdat.reshape(y_dimension,x_dimension)
             A = copy.deepcopy(nprawdat[0:y_dimension,:])
             B = nprawdat[0:y_dimension,0:1]
             newnprawdat = np.hstack((A, B))
-
 
             nprawdat=nprawdat.reshape(y_dimension * x_dimension,)
             newnprawdat=newnprawdat.reshape(y_dimension * (x_dimension + 1),)
@@ -278,21 +260,12 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
             newInputDataSet.GetPointData().AddArray(dat)
 
 
-        # Check some of the points in the vtk point array
-        #print(newPoints.GetPoint(1024))
-        print(newPoints.GetPoint(x_dimension))
-        #print(newPoints.GetPoint(524799))
-
-
-        #newInputDataSet.GetPointData().AddArray(dat)
-        #newInputDataSet.SetDimensions(1024,512,1)
-        #newInputDataSet.SetDimensions(1025,512,1)
         newInputDataSet.SetDimensions((x_dimension + 1),y_dimension,z_dimension)
         newInputDataSet.SetPoints(newPoints)
 
         return newInputDataSet
     def RequestData(self, request, inInfo, outInfo):
-        print("Request data")
+        print("Request data !  JOHN WAS HERE")
         EARTH_RADIUS_KM = 6378.137
         EARTH_ECCENTRICITY = 0.01671
         #TRUE_SCALE_LATITUDE = 90.0
@@ -307,6 +280,7 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         # is, then alter the input data set so that it has a copy of the first
         # column of values added to the end
         if (self.GetColumnAtEnd() == True):
+            print("LINNEA WAS NOT HERE!")
             newDataSet = self.AddColumnToEnd(inputDataSet0)
         else:
             #newDataSet = copy.deepcopy(inputDataSet0)
