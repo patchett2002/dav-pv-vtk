@@ -53,7 +53,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         </StringListDomain>
         """)
     def SetHemisphere(self, val):
-        print("Setting ", val)
         self.hemisphereToProject = val
         self.Modified()
     @smproperty.xml("""
@@ -68,11 +67,9 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         </IntVectorProperty>""")
     def SetColumnAtEnd(self, x):
         self.columnAtEnd = x
-        print("Set Column At End: ", self.columnAtEnd)
         self.Modified()
 
     def GetColumnAtEnd(self):
-        print("Get Column At End: ", self.columnAtEnd)
         return self.columnAtEnd
     # Taken from https://github.com/nsidc/polarstereo-lonlat-convert-py/blob/main/polar_convert/polar_convert.py
     def polar_lonlat_to_xy(self, longitude, latitude, true_scale_lat, re, e, hemisphere):
@@ -148,18 +145,12 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
 
         newPoints = vtk.vtkPoints()
         numPoints = inputDataSet.GetNumberOfPoints()
-        print("input data Number of points", numPoints)
 
         num_arrays = inputDataSet.GetPointData().GetNumberOfArrays()
-        print("Number of arrays:", num_arrays)
 
         # Get the dimensions of the input dataset
         input_dimensions = inputDataSet.GetDimensions()
 
-        print("Dimensions:")
-        print(input_dimensions[0])   # should be 1025
-        print(input_dimensions[1])   # should be 512
-        print(input_dimensions[2])   # should be 1
         x_dimension = input_dimensions[0]
         y_dimension = input_dimensions[1]
         z_dimension = input_dimensions[2]
@@ -172,7 +163,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
 
         next_lon_value = self.FindNextHighestLonValue(original_lon_points)
         # Should print 360 for the next_lon_value
-        print("Next highest longitude value: ", next_lon_value)
 
         latPoints = []
         lonPoints = []
@@ -197,7 +187,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         latPoints=latPoints.reshape(y_dimension,x_dimension)
         ALat = copy.deepcopy(latPoints)
         BLat = copy.deepcopy(latPoints[:,0:1])
-        print("BLAT length: ", np.size(BLat), " : ", BLat )
         NewLatArray = np.hstack((ALat, BLat))
 
         latPoints=latPoints.reshape(y_dimension * x_dimension,)
@@ -229,7 +218,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
             # populates rawdat list with input points
             for i in range(0, numPoints):
                 rawdat.append(ivals.GetValue(i))
-            print("rawdat number of points", len(rawdat))
             # Input the values from the altered numpy array into a new vtk
             # float array
             dat.SetName(ivals.GetName())
@@ -265,7 +253,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
 
         return newInputDataSet
     def RequestData(self, request, inInfo, outInfo):
-        print("Request data !  JOHN WAS HERE")
         EARTH_RADIUS_KM = 6378.137
         EARTH_ECCENTRICITY = 0.01671
         #TRUE_SCALE_LATITUDE = 90.0
@@ -280,7 +267,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         # is, then alter the input data set so that it has a copy of the first
         # column of values added to the end
         if (self.GetColumnAtEnd() == True):
-            print("LINNEA WAS NOT HERE!")
             newDataSet = self.AddColumnToEnd(inputDataSet0)
         else:
             #newDataSet = copy.deepcopy(inputDataSet0)
@@ -288,7 +274,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         newPoints = vtk.vtkPoints()
         numPoints = newDataSet.GetNumberOfPoints()
         num_arrays = newDataSet.GetPointData().GetNumberOfArrays()
-        print("Number of arrays:", num_arrays)
         # Get the dimensions of the input dataset
         input_dimensions = newDataSet.GetDimensions()
         #print(input_dimensions[0])   # should be 1024
@@ -297,7 +282,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         x_dimension = input_dimensions[0]
         y_dimension = input_dimensions[1]
         z_dimension = input_dimensions[2]
-        print("RD Input Dimensions:", x_dimension, y_dimension, z_dimension)
         #y_vals = ""
         # populate newPoints with stereographic points
         indx = 0    # Index for each point in the newPoints vtk points data set
@@ -329,7 +313,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         # y-dimension of newPoints by dividing the number of points in the newPoints
         # data set by the original x-dimension
         new_y_dimension = num_new_points // x_dimension
-        print("New y dimension:", new_y_dimension)
         # Create the output data set
         outputDataSet = vtk.vtkStructuredGrid.GetData(outInfo)
         # Loop through each of the scalar arrays in the dataset
@@ -341,7 +324,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
             ca.SetNumberOfComponents(1)
             ca.SetNumberOfTuples(num_new_points)
             # Print out the number of points
-            print("Number of points: ", newPoints.GetNumberOfPoints())
             # add to output
             #outputDataSet = vtk.vtkStructuredGrid.GetData(outInfo)
             #print("Output data set: ", outputDataSet)
@@ -361,8 +343,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
                         ca.SetValue(indx, ivals.GetValue(i))
                         indx = indx + 1
             # Try printing out the value at the 1025th point
-            print("Value at point 1024: ", ivals.GetValue(1024))
-            print("Value at point 1024 in ca: ", ca.GetValue(1024))
         outputDataSet.SetPoints(newPoints)
         executive = self.GetExecutive()
         outInfo = executive.GetOutputInformation(0)
@@ -371,13 +351,11 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         self.output_y_dimension = new_y_dimension
         self.output_z_dimension = z_dimension
 
-        print("X-dimension:", x_dimension)
 
         outInfo.Set(executive.WHOLE_EXTENT(), 0, (self.output_x_dimension - 1), 0, (self.output_y_dimension - 1), 0, (self.output_z_dimension - 1))
         outputDataSet.SetDimensions(self.output_x_dimension,self.output_y_dimension,self.output_z_dimension)
         return 1
     def RequestInformation(self, request, inInfo, outInfo):
-        print("I am running RequestInformation")
         #print("I am running RequestInformation")
 
         # get the first input.
@@ -417,7 +395,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
             self.output_y_dimension = self.input_y_dimension
         if (self.output_z_dimension == 0):
             self.output_z_dimension = self.input_z_dimension
-        print("Output dimensions:", self.output_x_dimension, self.output_y_dimension, self.output_z_dimension)
 
         executive = self.GetExecutive()
         outInfo = executive.GetOutputInformation(0)
@@ -426,7 +403,6 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         #outInfo.Set(executive.WHOLE_EXTENT(), 0, self.input_x_dimension, 0, (self.output_y_dimension - 1), 0, (self.output_z_dimension - 1))
         return 1
     def RequestUpdateExtent(self, request, inInfo, outInfo):
-        print("I am running RequestUpdateExtent")
 
         
         # Get the dimensions of the input dataset
