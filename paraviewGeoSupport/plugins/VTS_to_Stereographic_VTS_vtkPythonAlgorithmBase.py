@@ -1,6 +1,7 @@
 from vtkmodules.vtkCommonDataModel import vtkDataSet
 from vtkmodules.util.vtkAlgorithm import VTKPythonAlgorithmBase
 from vtkmodules.numpy_interface import dataset_adapter as dsa
+from vtk import vtkTimerLog
 # new module for ParaView-specific decorators.
 from paraview.util.vtkAlgorithm import smproxy, smproperty, smdomain
 from paraview import vtk
@@ -13,10 +14,14 @@ import copy
 class VTStoStereographicVTS(VTKPythonAlgorithmBase):
     # Earth radius from https://github.com/nsidc/polarstereo-lonlat-convert-py
     #EARTH_RADIUS_KM = 6378.137
-
+    CACHEDnewInputDataSetDone = False
+    CACHEDnewInputDataSet = vtk.vtkStructuredGrid()
+    pidivoneeighty = np.pi/180
     EARTH_RADIUS_KM = 6378.137
     EARTH_ECCENTRICITY = 0.01671
+    EARTH_ECCENTRICITY_SQUARED = EARTH_ECCENTRICITY * EARTH_ECCENTRICITY
     TRUE_SCALE_LATITUDE = 90.0
+    mc = np.cos(TRUE_SCALE_LATITUDE*pidivoneeighty) / np.sqrt(1 - EARTH_ECCENTRICITY_SQUARED * (np.sin(TRUE_SCALE_LATITUDE*pidivoneeighty) ** 2))
     def __init__(self):
         VTKPythonAlgorithmBase.__init__(self, nInputPorts=1, nOutputPorts=1)
         self.hemisphereToProject = ""
@@ -101,10 +106,10 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         else:
             hemi_direction = -1
             val_to_check_true_scale_lat = 90 + true_scale_lat
-        lat = np.abs(latitude) * np.pi / 180
-        lon = longitude * np.pi / 180
-        slat = true_scale_lat * np.pi / 180
-        e2 = e * e
+        lat = np.abs(latitude) * self.pidivoneeighty
+        lon = longitude * self.pidivoneeighty
+        slat = true_scale_lat * self.pidivoneeighty
+        e2 = self.EARTH_ECCENTRICITY_SQUARED
         # Snyder (1987) p. 161 Eqn 15-9
         t = np.tan(np.pi / 4 - lat / 2) / \
             ((1 - e * np.sin(lat)) / (1 + e * np.sin(lat))) ** (e / 2)
@@ -120,12 +125,14 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
             # Snyder (1987) p. 161 Eqn 21-34
             tc = np.tan(np.pi / 4 - slat / 2) / \
                 ((1 - e * np.sin(slat)) / (1 + e * np.sin(slat))) ** (e / 2)
-            mc = np.cos(slat) / np.sqrt(1 - e2 * (np.sin(slat) ** 2))
-            rho = re * mc * t / tc
+            #mc = np.cos(slat) / np.sqrt(1 - e2 * (np.sin(slat) ** 2))
+            #rho = re * mc * t / tc
+            rho = re * self.mc * t / tc
         x = rho * hemi_direction * np.sin(hemi_direction * lon)
         y = -rho * hemi_direction * np.cos(hemi_direction * lon)
         #print(x, y)
         return [x, y]
+
     # This function will take in an array and find and return one higher
     # longitude value (as a whole degree) than the last element in the array
     def FindNextHighestLonValue(self, arr):
@@ -141,6 +148,8 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
 
     def AddColumnToEnd(self, inputDataSet):
         # Create the new input data set
+        if (self.CACHEDnewInputDataSetDone):
+            return self.CACHEDnewInputDataSet
         newInputDataSet = vtk.vtkStructuredGrid()
 
         newPoints = vtk.vtkPoints()
@@ -251,6 +260,8 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         newInputDataSet.SetDimensions((x_dimension + 1),y_dimension,z_dimension)
         newInputDataSet.SetPoints(newPoints)
 
+        self.CACHEDnewInputDataSet = newInputDataSet
+        self.CACHEDnewInputDataSetDone = True
         return newInputDataSet
     def RequestData(self, request, inInfo, outInfo):
         EARTH_RADIUS_KM = 6378.137
@@ -266,11 +277,14 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         # Check that the Add Column To One End checkbox is checked, and if it
         # is, then alter the input data set so that it has a copy of the first
         # column of values added to the end
+        newdatasettimer = vtkTimerLog()
+        newdatasettimer.StartTimer()
         if (self.GetColumnAtEnd() == True):
             newDataSet = self.AddColumnToEnd(inputDataSet0)
         else:
             #newDataSet = copy.deepcopy(inputDataSet0)
             newDataSet = inputDataSet0
+        newdatasettimer.StopTimer()
         newPoints = vtk.vtkPoints()
         numPoints = newDataSet.GetNumberOfPoints()
         num_arrays = newDataSet.GetPointData().GetNumberOfArrays()
@@ -284,6 +298,12 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         z_dimension = input_dimensions[2]
         #y_vals = ""
         # populate newPoints with stereographic points
+        polarpointtimer = vtkTimerLog()
+        ppt = 0.0
+        insertpointtimer = vtkTimerLog()
+        ipt = 0.0
+        mappointstimer = vtkTimerLog()
+        mappointstimer.StartTimer()
         indx = 0    # Index for each point in the newPoints vtk points data set
         for i in range(0, numPoints):
             coord = newDataSet.GetPoint(i)
@@ -294,16 +314,30 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
             if (self.hemisphereToProject == "Northern Hemisphere"):
                 if y0 >= 0:
                     #print("Populating newPoints with points in the Northern Hemisphere")
+                    polarpointtimer.StartTimer()
                     x,y = self.polar_lonlat_to_xy(x0, y0, TRUE_SCALE_LATITUDE, EARTH_RADIUS_KM, EARTH_ECCENTRICITY, self.hemisphereToProject)
+                    polarpointtimer.StopTimer()
+                    insertpointtimer.StartTimer()
                     newPoints.InsertPoint(indx,x,y,0)
+                    insertpointtimer.StopTimer()
                     indx = indx + 1
+                    ppt = ppt + polarpointtimer.GetElapsedTime()
+                    ipt = ipt + insertpointtimer.GetElapsedTime()
             else:
                 if y0 <= 0:
+                    polarpointtimer.StartTimer()
                     x,y = self.polar_lonlat_to_xy(x0, y0, TRUE_SCALE_LATITUDE, EARTH_RADIUS_KM, EARTH_ECCENTRICITY, self.hemisphereToProject)
+                    polarpointtimer.StopTimer()
+                    insertpointtimer.StartTimer()
                     newPoints.InsertPoint(indx,x,y,0)
+                    insertpointtimer.StopTimer()
                     #y_vals = y_vals + " " + str(y0)
                     #print("Index of Southern Hemisphere point:", indx)
                     indx = indx + 1
+                    ppt = ppt + polarpointtimer.GetElapsedTime()
+                    ipt = ipt + insertpointtimer.GetElapsedTime()
+            
+        mappointstimer.StopTimer()
         #print("Y-values in Southern hemisphere projection:", y_vals)
         # Get the dimensions of the newPoints vtk points data set that only
         # contains one hemisphere's points
@@ -317,6 +351,8 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         outputDataSet = vtk.vtkStructuredGrid.GetData(outInfo)
         # Loop through each of the scalar arrays in the dataset
         # and add the array to the output dataset
+        maparraystimer = vtkTimerLog()
+        maparraystimer.StartTimer()
         for j in range(0, num_arrays):
             ivals = newDataSet.GetPointData().GetArray(j)
             ca = vtk.vtkFloatArray()
@@ -342,7 +378,7 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
                     if y0 <= 0:
                         ca.SetValue(indx, ivals.GetValue(i))
                         indx = indx + 1
-            # Try printing out the value at the 1025th point
+        maparraystimer.StopTimer()
         outputDataSet.SetPoints(newPoints)
         executive = self.GetExecutive()
         outInfo = executive.GetOutputInformation(0)
@@ -354,6 +390,11 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
 
         outInfo.Set(executive.WHOLE_EXTENT(), 0, (self.output_x_dimension - 1), 0, (self.output_y_dimension - 1), 0, (self.output_z_dimension - 1))
         outputDataSet.SetDimensions(self.output_x_dimension,self.output_y_dimension,self.output_z_dimension)
+        print("newdatasettimer:", newdatasettimer.GetElapsedTime())
+        print("mappointstimer:", mappointstimer.GetElapsedTime())
+        print(" polarpointtimer:", ppt)
+        print(" insertpointtimer:", ipt)
+        print("maparraytimer", maparraystimer.GetElapsedTime())
         return 1
     def RequestInformation(self, request, inInfo, outInfo):
         #print("I am running RequestInformation")
