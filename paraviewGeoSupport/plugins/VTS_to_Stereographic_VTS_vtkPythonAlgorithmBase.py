@@ -9,6 +9,7 @@ import numpy as np # needed for interpolation and pi
 import sys          # needed to get a command line argument
 import math         # needed to calculate the sine and cosine of the longitude
 import copy
+
 @smproxy.filter(label="VTS to Stereographic VTS")
 @smproperty.input(name="Input")
 class VTStoStereographicVTS(VTKPythonAlgorithmBase):
@@ -22,6 +23,7 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
     EARTH_ECCENTRICITY_SQUARED = EARTH_ECCENTRICITY * EARTH_ECCENTRICITY
     TRUE_SCALE_LATITUDE = 90.0
     mc = np.cos(TRUE_SCALE_LATITUDE*pidivoneeighty) / np.sqrt(1 - EARTH_ECCENTRICITY_SQUARED * (np.sin(TRUE_SCALE_LATITUDE*pidivoneeighty) ** 2))
+    lonlatcache = {}
     def __init__(self):
         VTKPythonAlgorithmBase.__init__(self, nInputPorts=1, nOutputPorts=1)
         self.hemisphereToProject = ""
@@ -100,6 +102,9 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         # We are projecting the northern hemisphere, so the hemi_direction is 1
         # (otherwise it is -1 for the southern hemisphere)
         #hemi_direction = 1
+        if (longitude, latitude) in  self.lonlatcache:
+            return self.lonlatcache[(longitude,latitude)]
+
         if (hemisphere == "Northern Hemisphere"):
             hemi_direction = 1
             val_to_check_true_scale_lat = 90 - true_scale_lat
@@ -131,6 +136,7 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         x = rho * hemi_direction * np.sin(hemi_direction * lon)
         y = -rho * hemi_direction * np.cos(hemi_direction * lon)
         #print(x, y)
+        self.lonlatcache[(longitude,latitude)] = [x,y]
         return [x, y]
 
     # This function will take in an array and find and return one higher
