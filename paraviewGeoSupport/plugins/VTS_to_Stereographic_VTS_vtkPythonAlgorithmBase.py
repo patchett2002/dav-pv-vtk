@@ -17,13 +17,13 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
     # All Caps identifiers should be invariants
     CACHEDnewInputDataSetDone = False
     CACHEDnewInputDataSet = vtk.vtkStructuredGrid()
-    pidivoneeighty = np.pi/180
+    RADIANS_PER_DEGREE = np.pi/180
     EARTH_RADIUS_KM = 6378.137
     EARTH_ECCENTRICITY = 0.01671
     EARTH_ECCENTRICITY_SQUARED = EARTH_ECCENTRICITY * EARTH_ECCENTRICITY
     TRUE_SCALE_LATITUDE_NORTH = 90.0
     TRUE_SCALE_LATITUDE_SOUTH = -90.0
-    #mc = np.cos(TRUE_SCALE_LATITUDE*pidivoneeighty) / np.sqrt(1 - EARTH_ECCENTRICITY_SQUARED * (np.sin(TRUE_SCALE_LATITUDE*pidivoneeighty) ** 2))
+    #mc = np.cos(TRUE_SCALE_LATITUDE*RADIANS_PER_DEGREE) / np.sqrt(1 - EARTH_ECCENTRICITY_SQUARED * (np.sin(TRUE_SCALE_LATITUDE*RADIANS_PER_DEGREE) ** 2))
     lonlatcache = {}
     def __init__(self):
         VTKPythonAlgorithmBase.__init__(self, nInputPorts=1, nOutputPorts=1)
@@ -112,9 +112,9 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         else:
             hemi_direction = -1
             val_to_check_true_scale_lat = 90 + true_scale_lat
-        lat = np.abs(latitude) * self.pidivoneeighty
-        lon = longitude * self.pidivoneeighty
-        slat = true_scale_lat * self.pidivoneeighty
+        lat = np.abs(latitude) * self.RADIANS_PER_DEGREE
+        lon = longitude * self.RADIANS_PER_DEGREE
+        slat = true_scale_lat * self.RADIANS_PER_DEGREE
         e2 = self.EARTH_ECCENTRICITY_SQUARED
         # Snyder (1987) p. 161 Eqn 15-9
         t = np.tan(np.pi / 4 - lat / 2) / \
