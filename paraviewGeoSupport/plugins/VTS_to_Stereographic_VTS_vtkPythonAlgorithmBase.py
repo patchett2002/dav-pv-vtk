@@ -14,15 +14,16 @@ import copy
 @smproperty.input(name="Input")
 class VTStoStereographicVTS(VTKPythonAlgorithmBase):
     # Earth radius from https://github.com/nsidc/polarstereo-lonlat-convert-py
-    #EARTH_RADIUS_KM = 6378.137
+    # All Caps identifiers should be invariants
     CACHEDnewInputDataSetDone = False
     CACHEDnewInputDataSet = vtk.vtkStructuredGrid()
     pidivoneeighty = np.pi/180
     EARTH_RADIUS_KM = 6378.137
     EARTH_ECCENTRICITY = 0.01671
     EARTH_ECCENTRICITY_SQUARED = EARTH_ECCENTRICITY * EARTH_ECCENTRICITY
-    TRUE_SCALE_LATITUDE = 90.0
-    mc = np.cos(TRUE_SCALE_LATITUDE*pidivoneeighty) / np.sqrt(1 - EARTH_ECCENTRICITY_SQUARED * (np.sin(TRUE_SCALE_LATITUDE*pidivoneeighty) ** 2))
+    TRUE_SCALE_LATITUDE_NORTH = 90.0
+    TRUE_SCALE_LATITUDE_SOUTH = -90.0
+    #mc = np.cos(TRUE_SCALE_LATITUDE*pidivoneeighty) / np.sqrt(1 - EARTH_ECCENTRICITY_SQUARED * (np.sin(TRUE_SCALE_LATITUDE*pidivoneeighty) ** 2))
     lonlatcache = {}
     def __init__(self):
         VTKPythonAlgorithmBase.__init__(self, nInputPorts=1, nOutputPorts=1)
@@ -132,7 +133,8 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
                 ((1 - e * np.sin(slat)) / (1 + e * np.sin(slat))) ** (e / 2)
             #mc = np.cos(slat) / np.sqrt(1 - e2 * (np.sin(slat) ** 2))
             #rho = re * mc * t / tc
-            rho = re * self.mc * t / tc
+            #rho = re * self.mc * t / tc
+            rho = re * np.cos(true_scale_lat*np.pi/180) / np.sqrt(1 - EARTH_ECCENTRICITY_SQUARED * (np.sin(true_scale_lat*np.pi/180) ** 2)) * t /tc
         x = rho * hemi_direction * np.sin(hemi_direction * lon)
         y = -rho * hemi_direction * np.cos(hemi_direction * lon)
         #print(x, y)
@@ -270,14 +272,14 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
         self.CACHEDnewInputDataSetDone = True
         return newInputDataSet
     def RequestData(self, request, inInfo, outInfo):
-        EARTH_RADIUS_KM = 6378.137
-        EARTH_ECCENTRICITY = 0.01671
-        #TRUE_SCALE_LATITUDE = 90.0
+        earth_radius_km = self.EARTH_RADIUS_KM
+        earth_eccentricity = self.EARTH_ECCENTRICITY
+        
         if (self.hemisphereToProject == "Northern Hemisphere"):
-            TRUE_SCALE_LATITUDE = 90.0
+            true_scale_latitude = self.TRUE_SCALE_LATITUDE_NORTH
         else:
-            TRUE_SCALE_LATITUDE = -90.0
-        #TRUE_SCALE_LATITUDE = self.trueScaleLatitude
+            true_scale_latitude = self.TRUE_SCALE_LATITUDE_SOUTH
+        
         # get the input data set
         inputDataSet0 = dsa.WrapDataObject(vtkDataSet.GetData(inInfo[0]))
         # Check that the Add Column To One End checkbox is checked, and if it
@@ -321,7 +323,7 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
                 if y0 >= 0:
                     #print("Populating newPoints with points in the Northern Hemisphere")
                     polarpointtimer.StartTimer()
-                    x,y = self.polar_lonlat_to_xy(x0, y0, TRUE_SCALE_LATITUDE, EARTH_RADIUS_KM, EARTH_ECCENTRICITY, self.hemisphereToProject)
+                    x,y = self.polar_lonlat_to_xy(x0, y0, true_scale_latitude, earth_radius_km, earth_eccentricity, self.hemisphereToProject)
                     polarpointtimer.StopTimer()
                     insertpointtimer.StartTimer()
                     newPoints.InsertPoint(indx,x,y,0)
@@ -332,7 +334,7 @@ class VTStoStereographicVTS(VTKPythonAlgorithmBase):
             else:
                 if y0 <= 0:
                     polarpointtimer.StartTimer()
-                    x,y = self.polar_lonlat_to_xy(x0, y0, TRUE_SCALE_LATITUDE, EARTH_RADIUS_KM, EARTH_ECCENTRICITY, self.hemisphereToProject)
+                    x,y = self.polar_lonlat_to_xy(x0, y0, true_scale_latitude, earth_radius_km, earth_eccentricity, self.hemisphereToProject)
                     polarpointtimer.StopTimer()
                     insertpointtimer.StartTimer()
                     newPoints.InsertPoint(indx,x,y,0)
