@@ -103,7 +103,15 @@ class VTStoVTSonSphere(VTKPythonAlgorithmBase):
             locations to move further from the center while negative scalar
             values at those data points will cause the data point locations to
             shift towards the center of the sphere.</Documentation>
-        </IntVectorProperty>""")
+        </IntVectorProperty>
+
+        <PropertyGroup label="Ordered Widgets">
+            <Property name="AddColumnToOneEnd" />
+            <Property name="IncreaseRadiusOfTheSphere" />
+            <Property name="WarpSphereByScalar" />
+            <Property name="AvailableScalarArrays" />
+            <Property name="WarpScaleFactorValue" />
+        </PropertyGroup>""")
     def SetWarpByScalar(self, x):
         self.warpByScalar = x
         self.Modified()
