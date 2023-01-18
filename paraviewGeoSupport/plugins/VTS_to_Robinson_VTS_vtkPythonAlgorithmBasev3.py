@@ -6,6 +6,10 @@ from vtkmodules.vtkGeovisCore import vtkGeoProjection, vtkGeoTransform
 from pyproj import CRS
 from pyproj import Transformer
 
+import pyproj
+
+from vtk.util import numpy_support
+
 # new module for ParaView-specific decorators.
 from paraview.util.vtkAlgorithm import smproxy, smproperty, smdomain
 
@@ -299,47 +303,86 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         #print("Real Meridian: ", self.GetCentralMeridian())
 
         # Get the source and destination projections
-        #geo = vtkGeoTransform()
-        #ps = vtkGeoProjection()
-        #pd = vtkGeoProjection()
-        #projName = "merc"
+        geo = vtkGeoTransform()
+        ps = vtkGeoProjection()
+        pd = vtkGeoProjection()
+        #projName = "robin"
         #pd.SetName(projName)
-        #geo.SetSourceProjection(ps)
-        #geo.SetDestinationProjection(pd)
-        #geopts = vtk.vtkPoints()
+        pd.SetPROJ4String("+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
+        #ps.SetName(projName)
+
+        #projName = "cart"
+        #pd.SetName(projName)
+
+        geo.SetSourceProjection(ps)
+        geo.SetDestinationProjection(pd)
+        geopts = vtk.vtkPoints()
 
         # Set what the projection coordinate system is (set it to World
         # Mercator for now since I have not found the EPSG code for the
         # World Robinson yet)
         #crs = CRS.from_epsg(3395)
         crs = CRS.from_proj4("+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
+        #crs = CRS.from_proj4("+proj=cart  +ellps=WGS84")
         proj = Transformer.from_crs(crs.geodetic_crs, crs)
+        #crsLonLat = CRS.from_proj4("+proj=lonlat  +ellps=WGS84")
+        #proj = Transformer.from_crs(crsLonLat.geodetic_crs, crs)
 
         # Test that the transform works
-        print("Test transformed coordinates: ", proj.transform(12, 15))
-        coord = inputDataSet0.GetPoint(0)
-        x0, y0, z0 = coord[:3]
+        #print("Test transformed coordinates: ", proj.transform(12, 15))
+        #coord = inputDataSet0.GetPoint(0)
+        #x0, y0, z0 = coord[:3]
         #print("First transformed coordinates: ",proj.transform(y0,x0))
-        print("First transformed coordinates: ",proj.transform(x0,y0))
+        #print("First transformed coordinates: ",proj.transform(x0,y0))
 
         print("Projected coordinate system:")
         print(crs)
         print()
         print("Geographic coordinate system:")
         print(crs.geodetic_crs)
-                
+        #print(crsLonLat.geodetic_crs)
+        
+        # populate oldPoints with the original points of the inputDataSet
+        # and then transform those points into a Robinson projection and
+        # put them in newPoints
+        #oldPoints = inputDataSet0.GetPoints()
+        oldPointsArray = inputDataSet0.GetPoints()
+        oldPoints = vtk.vtkPoints()
+        oldPointsFloatArray = numpy_support.numpy_to_vtk(num_array = oldPointsArray, deep = True, array_type = vtk.VTK_FLOAT)
+        #print(oldPoints)
+        #print(oldPointsArray)
+        #print("Hello")
+        #dir(oldPoints)
+        #dir(inputDataSet0)
+        #help(oldPoints)
+        help(inputDataSet0)
+        #print("World")
+        help(oldPointsArray)
+        #oldPointsFloatArray = vtk.vtkFloatArray()
+        #oldPointsFloatArray = oldPointsArray
+        print(oldPointsFloatArray)
+        #oldPoints.SetData(oldPointsArray)
+        oldPoints.SetData(oldPointsFloatArray)
+        #oldPoints = oldPointsArray
+        print(oldPoints)
+        geo.TransformPoints(oldPoints, newPoints)
+        #geo.TransformPoints(inputDataSet0, newPoints)
+        
+        '''
         # populate newPoints with the original points of the inputDataSet
         for i in range(0, numPoints):
             coord = inputDataSet0.GetPoint(i)
             x0, y0, z0 = coord[:3]
             #x,y = self.GetRobinsonPoint(x0,y0)
             #x,y = self.GetRobinsonPoint(x0,y0,mid_lon_rad)
-            #x,y = x0,y0
+            x,y = x0,y0
             #x,y = proj.transform(y0,x0)
-            x,y = proj.transform(x0,y0)
+            #x,y = proj.transform(x0,y0)
             #print("Transfromed coordinates: ",proj.transform(x0,y0))
-            newPoints.InsertPoint(i,x,y,0)
-
+            #newPoints.InsertPoint(i,x,y,0)
+            oldPoints.InsertPoint(i,x,y,0)
+        '''
+        #geo.TransformPoints(oldPoints, newPoints)
         #geo.TransformPoints(newPoints,geopts)
 
         '''
