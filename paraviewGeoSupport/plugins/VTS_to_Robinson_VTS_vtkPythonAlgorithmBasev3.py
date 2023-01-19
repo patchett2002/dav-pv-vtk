@@ -348,6 +348,10 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         #oldPoints = inputDataSet0.GetPoints()
         oldPointsArray = inputDataSet0.GetPoints()
         oldPoints = vtk.vtkPoints()
+        # 
+        # sgw.VTKObject.GetPoints()
+	# oldpoints = inputdataset0.VTKObject.GetPoints()
+	# this will give us a vtkPoints object
         oldPointsFloatArray = numpy_support.numpy_to_vtk(num_array = oldPointsArray, deep = True, array_type = vtk.VTK_FLOAT)
         #print(oldPoints)
         #print(oldPointsArray)
