@@ -54,6 +54,12 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         # Set the default realMeridian value to 0
         self.realMeridian = 0
 
+        # Set the default projection value to an empty string
+        self.projection = ""
+
+        # Create a list of common map projections to choose from
+        self._mapProjectionList = ["Robinson", "Mercator", "Northern Hemisphere Stereographic", "Southern Hemisphere Stereographic", "Lambert Conformal Conic"]
+
     def FillInputPortInformation(self, port, info):
         info.Set(vtk.vtkAlgorithm.INPUT_REQUIRED_DATA_TYPE(), "vtkDataSet")
         return 1
@@ -65,6 +71,24 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
     #@smproperty.dataarrayselection(name="Arrays")
     #def GetDataArraySelection(self):
         #return self._arrayselection
+
+    @smproperty.stringvector(name="AvailableMapProjections", information_only="1")
+    def GetAvailableProjections(self):
+        return(self._mapProjectionList)
+
+    @smproperty.stringvector(name="MapProjections", number_of_elements="1")
+    @smdomain.xml(\
+        """ <StringListDomain name="projChoice">
+                <RequiredProperties>
+                    <Property name="AvailableMapProjections"
+                        function="projSelection"/>
+                </RequiredProperties>
+        </StringListDomain>
+        """)
+    def SetProj(self, val):
+        print("Setting ", val)
+        self.projection = val
+        self.Modified()
 
     #@smproperty.intvector(name="PhiResolution", default_values=0)
     #@smdomain.intrange(min=0, max=1)
@@ -249,23 +273,141 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         
         return newInputDataSet
 
+    def GetProjString(self):
+        projString = ""
+        if (self.projection == "Robinson"):
+            projString = "+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+        elif (self.projection == "Mercator"):
+            projString = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+        elif (self.projection == "Northern Hemisphere Stereographic"):
+            projString = "+proj=stere +lat_0=90 +lat_ts=70 +lon_0=-45 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+        elif (self.projection == "Southern Hemisphere Stereographic"):
+            projString = "+proj=stere +lat_0=-90 +lat_ts=-71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+        elif (self.projection == "Lambert Conformal Conic"):
+            projString = "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+        return projString
+
+    # Will take in a string representing which hemisphere the user wants to
+    # project along with the input data set and will return the part of the
+    # input data set that belongs in the hemisphere given.
+    def GetHemisphere(self, hemisphere, inputData):
+        hemisphereData = vtk.vtkStructuredGrid()
+        num_arrays = inputData.GetPointData().GetNumberOfArrays()
+
+        # Get the dimensions of the input data set
+        input_dimension = inputData.GetDimensions()
+        x_dimension = input_dimension[0]
+        y_dimension = input_dimension[1]
+        z_dimension = input_dimension[2]
+
+        hemisphereDataPts = vtk.vtkPoints()
+        indx = 0
+        for i in range(0, inputData.GetNumberOfPoints()):
+            coord = inputData.GetPoint(i)
+            x0, y0, z0 = coord[:3]
+            if (hemisphere == "northern"):
+                if y0 >=0:
+                    hemisphereDataPts.InsertPoint(indx,x0,y0,0)
+                    indx = indx + 1
+            else:
+                if y0 <= 0:
+                    hemisphereDataPts.InsertPoint(indx,x0,y0,0)
+                    indx = indx + 1
+
+        new_y_dimension = hemisphereDataPts.GetNumberOfPoints() // x_dimension
+
+        # Loop through each of the scalar arrays in the inputData and add the
+        # scalar values in the hemisphere given by the user to the hemisphereData
+        # vtk structured grid.
+        for j in range(0, num_arrays):
+            ivals = inputData.GetPointData().GetArray(j)
+            ca = vtk.vtkFloatArray()
+            ca.SetName(ivals.GetName())
+            ca.SetNumberOfComponents(1)
+            ca.SetNumberOfTuples(hemisphereDataPts.GetNumberOfPoints())
+            # add the new array to the hemisphereData
+            hemisphereData.GetPointData().AddArray(ca)
+            # copy the values over element by element
+            indx2 = 0
+            for k in range(0, inputData.GetNumberOfPoints()):
+                coord = inputData.GetPoint(k)
+                x, y, z = coord[:3]
+                if (hemisphere == "northern"):
+                    if y >= 0:
+                        ca.SetValue(indx2, ivals.GetValue(k))
+                        indx2 = indx2 + 1
+                else:
+                    if y <= 0:
+                        ca.SetValue(indx2, ivals.GetValue(k))
+                        indx2 = indx2 + 1
+
+        hemisphereData.SetDimensions(x_dimension, new_y_dimension, z_dimension)
+        hemisphereData.SetPoints(hemisphereDataPts)
+        return hemisphereData
+
     def RequestData(self, request, inInfo, outInfo):
         # get the first input.
-        inputDataSet0 = dsa.WrapDataObject(vtkDataSet.GetData(inInfo[0]))
+        #inputDataSet0 = dsa.WrapDataObject(vtkDataSet.GetData(inInfo[0]))
+        inputDataSet1 = dsa.WrapDataObject(vtkDataSet.GetData(inInfo[0]))
 
         # compute a value.
         #data = inputDataSet0.PointData["Sea Level Change (m)"] / 2.0
         #pointX, pointY, pointZ = inputDataSet0.GetPoint(0)
 
         newPoints = vtk.vtkPoints()
-        numPoints = inputDataSet0.GetNumberOfPoints()
+        #numPoints = inputDataSet0.GetNumberOfPoints()
+        #numPoints = inputDataSet1.GetNumberOfPoints()
         
-        num_arrays = inputDataSet0.GetPointData().GetNumberOfArrays()
+        #num_arrays = inputDataSet0.GetPointData().GetNumberOfArrays()
+        num_arrays = inputDataSet1.GetPointData().GetNumberOfArrays()
         print("Number of arrays:", num_arrays)
         
         # Get the dimensions of the input dataset
-        input_dimensions = inputDataSet0.GetDimensions()
+        #input_dimensions = inputDataSet0.GetDimensions()
+        #input_dimensions = inputDataSet1.GetDimensions()
 
+
+        #print("Dimensions:")
+        #print(input_dimensions[0])   # should be 1025
+        #print(input_dimensions[1])   # should be 512
+        #print(input_dimensions[2])   # should be 1
+
+        #x_dimension = input_dimensions[0]
+        #y_dimension = input_dimensions[1]
+        #z_dimension = input_dimensions[2]
+
+        print("Real Meridian: ", self.GetCentralMeridian())
+
+        # Check that the Central Meridian At Zero checkbox is checked, and if it
+        # is, then alter the input data set so that it is centered at zero
+        # degrees longitude
+        #if (self.GetCentralMeridian() == True):
+            #inputDataSet0 = self.CenterAtZero(inputDataSet0)
+            #inputDataSet1 = self.CenterAtZero(inputDataSet0)
+
+        # Check that the Central Meridian At Zero checkbox is checked, and if it
+        # is, then alter the input data set so that it is centered at zero
+        # degrees longitude. Also check whether the projection is a lambert 
+        # conformal conic or a stereographic projection, and if it is one of
+        # those projections, then alter the input data set to only include one
+        # hemisphere.
+        if ((self.GetCentralMeridian() == True) and ((self.projection == "Northern Hemisphere Stereographic") or (self.projection == "Lambert Conformal Conic"))):
+            wholeInputDataSet = self.CenterAtZero(inputDataSet1)
+            inputDataSet0 = self.GetHemisphere("northern", wholeInputDataSet) 
+        elif ((self.GetCentralMeridian() == True) and (self.projection == "Southern Hemisphere Stereographic")):
+            wholeInputDataSet = self.CenterAtZero(inputDataSet1)
+            inputDataSet0 = self.GetHemisphere("southern", wholeInputDataSet) 
+        elif (self.GetCentralMeridian() == True):
+            inputDataSet0 = self.CenterAtZero(inputDataSet1)
+        elif ((self.projection == "Northern Hemisphere Stereographic") or (self.projection == "Lambert Conformal Conic")):
+            inputDataSet0 = self.GetHemisphere("northern", inputDataSet1) 
+        elif (self.projection == "Southern Hemisphere Stereographic"):
+            inputDataSet0 = self.GetHemisphere("southern", inputDataSet1) 
+        else:
+            inputDataSet0 = inputDataSet1
+
+        # Get the dimensions of the input dataset
+        input_dimensions = inputDataSet0.GetDimensions()
 
         print("Dimensions:")
         print(input_dimensions[0])   # should be 1025
@@ -276,14 +418,7 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         y_dimension = input_dimensions[1]
         z_dimension = input_dimensions[2]
 
-        print("Real Meridian: ", self.GetCentralMeridian())
-
-        # Check that the Central Meridian At Zero checkbox is checked, and if it
-        # is, then alter the input data set so that it is centered at zero
-        # degrees longitude
-        if (self.GetCentralMeridian() == True):
-            inputDataSet0 = self.CenterAtZero(inputDataSet0)
-            #inputDataSet1 = self.CenterAtZero(inputDataSet0)
+        numPoints = inputDataSet0.GetNumberOfPoints()
 
         # Get the longitude value at the first and last columns and calculate
         # central meridian to use for the Robinson projection
@@ -308,7 +443,8 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         pd = vtkGeoProjection()
         #projName = "robin"
         #pd.SetName(projName)
-        pd.SetPROJ4String("+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
+        #pd.SetPROJ4String("+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
+        pd.SetPROJ4String(self.GetProjString())
         #ps.SetName(projName)
 
         #projName = "cart"
@@ -322,7 +458,8 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         # Mercator for now since I have not found the EPSG code for the
         # World Robinson yet)
         #crs = CRS.from_epsg(3395)
-        crs = CRS.from_proj4("+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
+        #crs = CRS.from_proj4("+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
+        crs = CRS.from_proj4(self.GetProjString())
         #crs = CRS.from_proj4("+proj=cart  +ellps=WGS84")
         proj = Transformer.from_crs(crs.geodetic_crs, crs)
         #crsLonLat = CRS.from_proj4("+proj=lonlat  +ellps=WGS84")
@@ -347,22 +484,26 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         # put them in newPoints
         #oldPoints = inputDataSet0.GetPoints()
         oldPointsArray = inputDataSet0.GetPoints()
-        oldPoints = vtk.vtkPoints()
-        oldPointsFloatArray = numpy_support.numpy_to_vtk(num_array = oldPointsArray, deep = True, array_type = vtk.VTK_FLOAT)
+        if (((self.projection == "Robinson") or (self.projection == "Mercator")) and (self.GetCentralMeridian() != True)):
+            oldPoints = inputDataSet0.VTKObject.GetPoints()
+        else:
+            oldPoints = inputDataSet0.GetPoints()
+        #oldPoints = vtk.vtkPoints()
+        #oldPointsFloatArray = numpy_support.numpy_to_vtk(num_array = oldPointsArray, deep = True, array_type = vtk.VTK_FLOAT)
         #print(oldPoints)
         #print(oldPointsArray)
         #print("Hello")
         #dir(oldPoints)
         #dir(inputDataSet0)
         #help(oldPoints)
-        help(inputDataSet0)
+        #help(inputDataSet0)
         #print("World")
-        help(oldPointsArray)
+        #help(oldPointsArray)
         #oldPointsFloatArray = vtk.vtkFloatArray()
         #oldPointsFloatArray = oldPointsArray
-        print(oldPointsFloatArray)
+        #print(oldPointsFloatArray)
         #oldPoints.SetData(oldPointsArray)
-        oldPoints.SetData(oldPointsFloatArray)
+        #oldPoints.SetData(oldPointsFloatArray)
         #oldPoints = oldPointsArray
         print(oldPoints)
         geo.TransformPoints(oldPoints, newPoints)
