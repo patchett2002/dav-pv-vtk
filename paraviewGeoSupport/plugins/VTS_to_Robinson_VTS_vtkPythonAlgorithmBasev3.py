@@ -58,7 +58,7 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         self.projection = ""
 
         # Create a list of common map projections to choose from
-        self._mapProjectionList = ["Robinson", "Mercator", "Northern Hemisphere Stereographic", "Southern Hemisphere Stereographic", "Lambert Conformal Conic"]
+        self._mapProjectionList = ["Robinson", "Mercator", "Northern Hemisphere Stereographic", "Southern Hemisphere Stereographic", "Lambert Conformal Conic", "Sphere"]
 
     def FillInputPortInformation(self, port, info):
         info.Set(vtk.vtkAlgorithm.INPUT_REQUIRED_DATA_TYPE(), "vtkDataSet")
@@ -285,6 +285,8 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
             projString = "+proj=stere +lat_0=-90 +lat_ts=-71 +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
         elif (self.projection == "Lambert Conformal Conic"):
             projString = "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=40 +lon_0=-97 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+        elif (self.projection == "Sphere"):
+            projString = "+proj=cart +ellps=WGS84"
         return projString
 
     # Will take in a string representing which hemisphere the user wants to
@@ -506,7 +508,28 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         #oldPoints.SetData(oldPointsFloatArray)
         #oldPoints = oldPointsArray
         print(oldPoints)
-        geo.TransformPoints(oldPoints, newPoints)
+
+        # If the projection is set to Sphere, then loop through each point one
+        # at a time to convert the coordinates.
+        if (self.projection == "Sphere"):
+            ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
+            #lla = pyproj.Proj(proj='lonlat', ellps='WGS84', datum='WGS84')
+            lla = pyproj.Proj(proj='latlong', ellps='WGS84', datum='WGS84')
+
+            # populate newPoints with Sphere points with the assumption that
+            # the data is at the same elevation as the sphere (the sphere is
+            # smooth without any warping)
+            for i in range(0, numPoints):
+                coord = inputDataSet0.GetPoint(i)
+                #x0, y0, z0 = coord[:3]
+                x, y, z = coord[:3]
+                #x,y,z = pyproj.transform(lla,ecef,x0,y0,0,radians=False)
+                #x1,y1,z1 = pyproj.transform(lla,ecef,x,y,0,radians=False)
+                #x1,y1,z1 = pyproj.transform(lla,ecef,180,0,0,radians=False)
+                newPoints.InsertPoint(i,x,y,z)
+
+        else:
+            geo.TransformPoints(oldPoints, newPoints)
         #geo.TransformPoints(inputDataSet0, newPoints)
         
         '''
