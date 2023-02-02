@@ -2,7 +2,6 @@ from vtkmodules.vtkCommonDataModel import vtkDataSet
 from vtkmodules.util.vtkAlgorithm import VTKPythonAlgorithmBase
 from vtkmodules.numpy_interface import dataset_adapter as dsa
 from vtkmodules.vtkGeovisCore import vtkGeoProjection, vtkGeoTransform
-#from vtkmodules.vtkGeovisCore import vtkGeoProjection
 from pyproj import CRS
 from pyproj import Transformer
 
@@ -15,17 +14,6 @@ from paraview.util.vtkAlgorithm import smproxy, smproperty, smdomain
 
 from paraview import vtk
 import numpy as np #needed for interpolation and pi
-
-#def createModifiedCallback(anobject):
-    #import weakref
-    #weakref_obj = weakref.ref(anobject)
-    #anobject = None
-    #def _markmodified(*args, **kwars):
-        #o = weakref_obj()
-        #if o is not None:
-            #o.Modified()
-    #return _markmodified
-
 
 @smproxy.filter(label="VTS to Robinson VTS")
 @smproperty.input(name="Input")
@@ -41,15 +29,7 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
        0.6769,0.7346,0.7903,0.8435,0.8936,0.9394,0.9761,1]
 
     def __init__(self):
-        #VTKPythonAlgorithmBase.__init__(self)
-        #VTKPythonAlgorithmBase.__init__(self, nInputPorts=1, nOutputPorts=1, outputType='vtkStructuredGrid')
         VTKPythonAlgorithmBase.__init__(self, nInputPorts=1, nOutputPorts=1)
-
-        #from vtkmodules.vtkCommonCore import vtkDataArraySelection
-        #self._arrayselection = vtkDataArraySelection()
-        #self._arrayselection.AddObserver("ModifiedEvent", createModifiedCallback(self))
-        #self._arrayselection.AddArray('One')
-        #self._arrayselection.AddArray('Two')
 
         # Set the default realMeridian value to 0
         self.realMeridian = 0
@@ -67,10 +47,6 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
     def FillOutputPortInformation(self, port, info):
         info.Set(vtk.vtkDataObject.DATA_TYPE_NAME(), "vtkStructuredGrid")
         return 1
-
-    #@smproperty.dataarrayselection(name="Arrays")
-    #def GetDataArraySelection(self):
-        #return self._arrayselection
 
     @smproperty.stringvector(name="AvailableMapProjections", information_only="1")
     def GetAvailableProjections(self):
@@ -108,23 +84,6 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
     def GetCentralMeridian(self):
         return self.realMeridian
 
-
-    def GetRobinsonPoint(self,x,y,mylambda0=0):
-        '''x,y is real longitude,latitude - Return Robinson point'''
-        R = np.pi    # This number simply scales the output
-        mylambda = x * 0.01745329252 # longitude of point to plot in Radians
-        #mylambda0 = np.pi            # Central Meridian in Radians 180 degrees == pi
-        #mylambda0 = 0            # Central Meridian in Radians 0 degrees == 0
-        RobinsonX = np.interp([np.abs(y)],self.degrees,self.X) # interpolate the Robinson X
-        RobinsonY = np.interp([np.abs(y)],self.degrees,self.Y) # interpolate the Robinson Y
-        # calculate the robinson coordinates
-        new_x = 0.8487 * R * RobinsonX * (mylambda - mylambda0)
-        new_y = 1.3523 * R * RobinsonY
-        # Check if this was in southern Hemisphere, interpolation didn't deal with negatives
-        if y < 0:
-            new_y = new_y * -1
-        return (new_x[0], new_y[0])
-
     # This function will take in an array and the number of elements inside of it
     # and find and return the index of the element in the array that is equal to
     # or approximately equal to 180
@@ -134,9 +93,8 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
             if (abs((180 - arr[i])) < 0.35):
                 return i
         
-        #print(arr[512])
         return -1
-
+    
     def CenterAtZero(self, inputDataSet):
         # Create the new input data set
         #newInputDataSet = vtk.vtkStructuredGrid.New()
@@ -186,18 +144,13 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         latPoints=latPoints.reshape(y_dimension, x_dimension)
         lonPoints=lonPoints.reshape(y_dimension, x_dimension)
         
-        #A = lonPoints[0:512,0:513]    # [Rows, Columns]
         A = lonPoints[0:y_dimension,0:int(lon_indx_180 + 1)]    # [Rows, Columns]
-        #B = lonPoints[0:512,512:]
-        #B = lonPoints[0:512,513:]    # Right hand side of the dataset
         B = lonPoints[0:y_dimension,int(lon_indx_180 + 1):]    # Right hand side of the dataset
         NewLonArray = np.hstack((B,A))
         NewLonArray = NewLonArray.reshape(y_dimension * x_dimension,)
 
 
-        #ALat = latPoints[0:512,0:512]
         ALat = latPoints[0:y_dimension,0:int(lon_indx_180)]
-        #BLat = latPoints[0:512,512:]
         BLat = latPoints[0:y_dimension,int(lon_indx_180):]
         NewLatArray = np.hstack((BLat, ALat))
         NewLatArray = NewLatArray.reshape(y_dimension * x_dimension,)
@@ -236,9 +189,7 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
             nprawdat=nprawdat.reshape(y_dimension, x_dimension)
 
 
-            #A = nprawdat[0:512,0:512]
             A = nprawdat[0:y_dimension,0:int(lon_indx_180)]
-            #B = nprawdat[0:512,512:]
             B = nprawdat[0:y_dimension,int(lon_indx_180):]
             NewArray = np.hstack((B,A))
             NewArray = NewArray.reshape(y_dimension * x_dimension,)
@@ -349,43 +300,14 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
 
     def RequestData(self, request, inInfo, outInfo):
         # get the first input.
-        #inputDataSet0 = dsa.WrapDataObject(vtkDataSet.GetData(inInfo[0]))
         inputDataSet1 = dsa.WrapDataObject(vtkDataSet.GetData(inInfo[0]))
 
-        # compute a value.
-        #data = inputDataSet0.PointData["Sea Level Change (m)"] / 2.0
-        #pointX, pointY, pointZ = inputDataSet0.GetPoint(0)
-
         newPoints = vtk.vtkPoints()
-        #numPoints = inputDataSet0.GetNumberOfPoints()
-        #numPoints = inputDataSet1.GetNumberOfPoints()
         
-        #num_arrays = inputDataSet0.GetPointData().GetNumberOfArrays()
         num_arrays = inputDataSet1.GetPointData().GetNumberOfArrays()
         print("Number of arrays:", num_arrays)
         
-        # Get the dimensions of the input dataset
-        #input_dimensions = inputDataSet0.GetDimensions()
-        #input_dimensions = inputDataSet1.GetDimensions()
-
-
-        #print("Dimensions:")
-        #print(input_dimensions[0])   # should be 1025
-        #print(input_dimensions[1])   # should be 512
-        #print(input_dimensions[2])   # should be 1
-
-        #x_dimension = input_dimensions[0]
-        #y_dimension = input_dimensions[1]
-        #z_dimension = input_dimensions[2]
-
         print("Real Meridian: ", self.GetCentralMeridian())
-
-        # Check that the Central Meridian At Zero checkbox is checked, and if it
-        # is, then alter the input data set so that it is centered at zero
-        # degrees longitude
-        #if (self.GetCentralMeridian() == True):
-            #inputDataSet0 = self.CenterAtZero(inputDataSet0)
-            #inputDataSet1 = self.CenterAtZero(inputDataSet0)
 
         # Check that the Central Meridian At Zero checkbox is checked, and if it
         # is, then alter the input data set so that it is centered at zero
@@ -435,82 +357,32 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         # Convert the central meridian from degrees to radians
         mid_lon_rad = mid_lon * np.pi/180
 
-
-        #print("Real Meridian: ", self.realMeridian)
-        #print("Real Meridian: ", self.GetCentralMeridian())
-
         # Get the source and destination projections
         geo = vtkGeoTransform()
         ps = vtkGeoProjection()
         pd = vtkGeoProjection()
-        #projName = "robin"
-        #pd.SetName(projName)
-        #pd.SetPROJ4String("+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
         pd.SetPROJ4String(self.GetProjString())
-        #ps.SetName(projName)
 
-        #projName = "cart"
-        #pd.SetName(projName)
+        if (self.projection == "sphere"):
+            ps.SetPROJ4String("+proj=lonlat +ellps=WGS84")
 
         geo.SetSourceProjection(ps)
         geo.SetDestinationProjection(pd)
         geopts = vtk.vtkPoints()
 
-        # Set what the projection coordinate system is (set it to World
-        # Mercator for now since I have not found the EPSG code for the
-        # World Robinson yet)
-        #crs = CRS.from_epsg(3395)
-        #crs = CRS.from_proj4("+proj=robin +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
-        crs = CRS.from_proj4(self.GetProjString())
-        #crs = CRS.from_proj4("+proj=cart  +ellps=WGS84")
-        proj = Transformer.from_crs(crs.geodetic_crs, crs)
-        #crsLonLat = CRS.from_proj4("+proj=lonlat  +ellps=WGS84")
-        #proj = Transformer.from_crs(crsLonLat.geodetic_crs, crs)
-
-        # Test that the transform works
-        #print("Test transformed coordinates: ", proj.transform(12, 15))
-        #coord = inputDataSet0.GetPoint(0)
-        #x0, y0, z0 = coord[:3]
-        #print("First transformed coordinates: ",proj.transform(y0,x0))
-        #print("First transformed coordinates: ",proj.transform(x0,y0))
-
-        print("Projected coordinate system:")
-        print(crs)
-        print()
-        print("Geographic coordinate system:")
-        print(crs.geodetic_crs)
-        #print(crsLonLat.geodetic_crs)
-        
         # populate oldPoints with the original points of the inputDataSet
         # and then transform those points into a Robinson projection and
         # put them in newPoints
-        #oldPoints = inputDataSet0.GetPoints()
         oldPointsArray = inputDataSet0.GetPoints()
-        if (((self.projection == "Robinson") or (self.projection == "Mercator")) and (self.GetCentralMeridian() != True)):
+        if (((self.projection == "Robinson") or (self.projection == "Mercator") or (self.projection == "Sphere")) and (self.GetCentralMeridian() != True)):
             oldPoints = inputDataSet0.VTKObject.GetPoints()
         else:
             oldPoints = inputDataSet0.GetPoints()
-        #oldPoints = vtk.vtkPoints()
-        #oldPointsFloatArray = numpy_support.numpy_to_vtk(num_array = oldPointsArray, deep = True, array_type = vtk.VTK_FLOAT)
-        #print(oldPoints)
-        #print(oldPointsArray)
-        #print("Hello")
-        #dir(oldPoints)
-        #dir(inputDataSet0)
-        #help(oldPoints)
-        #help(inputDataSet0)
-        #print("World")
-        #help(oldPointsArray)
-        #oldPointsFloatArray = vtk.vtkFloatArray()
-        #oldPointsFloatArray = oldPointsArray
-        #print(oldPointsFloatArray)
-        #oldPoints.SetData(oldPointsArray)
-        #oldPoints.SetData(oldPointsFloatArray)
-        #oldPoints = oldPointsArray
         print(oldPoints)
 
         # If the projection is set to Sphere, then loop through each point one
         # at a time to convert the coordinates.
+        '''
         if (self.projection == "Sphere"):
             ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
             #lla = pyproj.Proj(proj='lonlat', ellps='WGS84', datum='WGS84')
@@ -524,40 +396,16 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
                 #x0, y0, z0 = coord[:3]
                 x, y, z = coord[:3]
                 #x,y,z = pyproj.transform(lla,ecef,x0,y0,0,radians=False)
-                #x1,y1,z1 = pyproj.transform(lla,ecef,x,y,0,radians=False)
+                x1,y1,z1 = pyproj.transform(lla,ecef,x,y,0,radians=False)
                 #x1,y1,z1 = pyproj.transform(lla,ecef,180,0,0,radians=False)
                 newPoints.InsertPoint(i,x,y,z)
 
         else:
             geo.TransformPoints(oldPoints, newPoints)
-        #geo.TransformPoints(inputDataSet0, newPoints)
-        
         '''
-        # populate newPoints with the original points of the inputDataSet
-        for i in range(0, numPoints):
-            coord = inputDataSet0.GetPoint(i)
-            x0, y0, z0 = coord[:3]
-            #x,y = self.GetRobinsonPoint(x0,y0)
-            #x,y = self.GetRobinsonPoint(x0,y0,mid_lon_rad)
-            x,y = x0,y0
-            #x,y = proj.transform(y0,x0)
-            #x,y = proj.transform(x0,y0)
-            #print("Transfromed coordinates: ",proj.transform(x0,y0))
-            #newPoints.InsertPoint(i,x,y,0)
-            oldPoints.InsertPoint(i,x,y,0)
-        '''
-        #geo.TransformPoints(oldPoints, newPoints)
-        #geo.TransformPoints(newPoints,geopts)
 
-        '''
-        # populate newPoints with Robinson points
-        for i in range(0, numPoints):
-            coord = inputDataSet0.GetPoint(i)
-            x0, y0, z0 = coord[:3]
-            #x,y = self.GetRobinsonPoint(x0,y0)
-            x,y = self.GetRobinsonPoint(x0,y0,mid_lon_rad)
-            newPoints.InsertPoint(i,x,y,0)
-        '''
+        geo.TransformPoints(oldPoints, newPoints)
+        
 
         # Create the output data set
         outputDataSet = vtk.vtkStructuredGrid.GetData(outInfo)
@@ -575,17 +423,10 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
             # Print out the number of points
             print("Number of points: ", newPoints.GetNumberOfPoints())
 
-            # add to output
-            #outputDataSet = vtk.vtkStructuredGrid.GetData(outInfo)
-        
-
             print("Output data set: ", outputDataSet)
-
-
 
             #add the new array to the output
             outputDataSet.GetPointData().AddArray(ca)
-
 
             #copy the values over element by element
             for i in range(0, numPoints):
@@ -597,8 +438,6 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
 
         outputDataSet.SetDimensions(x_dimension,y_dimension,z_dimension)
         outputDataSet.SetPoints(newPoints)
-
-        #outputDataSet.SetPoints(geopts)
 
         print(outputDataSet)
         
