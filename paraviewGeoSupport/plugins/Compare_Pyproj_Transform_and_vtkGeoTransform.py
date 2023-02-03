@@ -3,7 +3,8 @@ import pyproj
 from vtkmodules.vtkGeovisCore import vtkGeoProjection, vtkGeoTransform
 
 # Point coordinates to test pyproj.transform and vtkGeoTransform
-x0,y0 = 50,20
+#x0,y0 = 50,20
+x0,y0 = 0.661,-2.137
 x1,y1 = 50,50
 x2,y2 = 50,70
 x3,y3 = 80,20
@@ -15,7 +16,7 @@ print("Transforming the latitude and longitude points using pyproj.transform (wi
 # Print out what the transformed coordinates are using pyproj.transform
 ecef = pyproj.Proj(proj='geocent', ellps='WGS84', datum='WGS84')
 lla = pyproj.Proj(proj='lonlat', ellps='WGS84', datum='WGS84')
-newX0,newY0,newZ0 = pyproj.transform(lla, ecef, x0, y0, 0, radians=False)
+newX0,newY0,newZ0 = pyproj.transform(lla, ecef, x0, y0, -20.531, radians=False)
 
 print("Original first point: ",x0,",",y0,sep="")
 print("Transformed first point: ",newX0,",",newY0,",",newZ0,sep="")

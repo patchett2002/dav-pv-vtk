@@ -404,8 +404,21 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
             geo.TransformPoints(oldPoints, newPoints)
         '''
 
-        geo.TransformPoints(oldPoints, newPoints)
+        #geo.TransformPoints(oldPoints, newPoints)
         
+        if (self.projection == "Sphere"):
+            transproj = Transformer.from_crs({'proj':'latlong', 'ellps':'WGS84', 'datum':'WGS84'}, {'proj':'geocent', 'ellps':'WGS84', 'datum':'WGS84'}, always_xy=True)
+            npArrayOldPoints = numpy_support.vtk_to_numpy(oldPoints.GetData())
+            listOldPoints = list(npArrayOldPoints)
+
+            listNewPoints = list(transproj.itransform(listOldPoints))
+            npArrayNewPoints = np.array(listNewPoints)
+            vtkArrayNewPoints = numpy_support.numpy_to_vtk(npArrayNewPoints, deep=True, array_type=vtk.VTK_FLOAT)
+
+            for i in range(vtkArrayNewPoints.GetNumberOfTuples()):
+                newPoints.InsertNextPoint(vtkArrayNewPoints.GetTuple3(i))
+        else:
+            geo.TransformPoints(oldPoints, newPoints)
 
         # Create the output data set
         outputDataSet = vtk.vtkStructuredGrid.GetData(outInfo)
