@@ -6,6 +6,8 @@ from pyproj import CRS
 from pyproj import Transformer
 
 import pyproj
+import math
+import copy
 
 from vtk.util import numpy_support
 
@@ -15,9 +17,9 @@ from paraview.util.vtkAlgorithm import smproxy, smproperty, smdomain
 from paraview import vtk
 import numpy as np #needed for interpolation and pi
 
-@smproxy.filter(label="VTS to Robinson VTS")
+@smproxy.filter(label="Latitude Longitude Reproject")
 @smproperty.input(name="Input")
-class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
+class GeoLatLonReproject(VTKPythonAlgorithmBase):
 
     # Arrays for interpolating Robinson Coordinates
     degrees=[0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90]
@@ -33,6 +35,9 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
 
         # Set the default realMeridian value to 0
         self.realMeridian = 0
+
+        # Set the default columnAtEnd value to 0
+        self.columnAtEnd = 0
 
         # Set the default projection value to an empty string
         self.projection = ""
@@ -51,6 +56,25 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
     @smproperty.stringvector(name="AvailableMapProjections", information_only="1")
     def GetAvailableProjections(self):
         return(self._mapProjectionList)
+
+    @smproperty.xml("""
+        <IntVectorProperty name="AddColumnToOneEnd"
+            number_of_elements="1"
+            default_values="0"
+            command="SetColumnAtEnd">
+            <BooleanDomain name="bool" />
+            <Documentation>If on, copies the values in the first column of the
+            input data set and adds that column to the end of the data set.
+            </Documentation>
+        </IntVectorProperty>""")
+    def SetColumnAtEnd(self, x):
+        self.columnAtEnd = x
+        print("Set Column At End: ", self.columnAtEnd)
+        self.Modified()
+
+    def GetColumnAtEnd(self):
+        print("Get Column At End: ", self.columnAtEnd)
+        return self.columnAtEnd
 
     @smproperty.stringvector(name="MapProjections", number_of_elements="1")
     @smdomain.xml(\
@@ -95,137 +119,8 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
                 return i
         
         return -1
-    
-    def CenterAtZero(self, inputDataSet):
-        # Create the new input data set
-        #newInputDataSet = vtk.vtkStructuredGrid.New()
-        newInputDataSet = vtk.vtkStructuredGrid()
 
-        newPoints = vtk.vtkPoints()
-        numPoints = inputDataSet.GetNumberOfPoints()
-
-        num_arrays = inputDataSet.GetPointData().GetNumberOfArrays()
-        print("Number of arrays:", num_arrays)
-
-        # Get the dimensions of the input dataset
-        input_dimensions = inputDataSet.GetDimensions()
-
-        print("Dimensions:")
-        print(input_dimensions[0])   # should be 1025
-        print(input_dimensions[1])   # should be 512
-        print(input_dimensions[2])   # should be 1
-        x_dimension = input_dimensions[0]
-        y_dimension = input_dimensions[1]
-        z_dimension = input_dimensions[2]
-
-        original_lon_points = []
-        for i in range(0, numPoints):
-            original_coord = inputDataSet.GetPoint(i)
-            x,y = original_coord[:2]
-            original_lon_points.append(x)
-
-        lon_indx_180 = self.FindIndxAtLon(original_lon_points, x_dimension,180)
-        # Should print 512 for the lon_indx_180
-        print("Index of the x-dimension with a longitude of 180: ", lon_indx_180)
-
-        latPoints = []
-        lonPoints = []
-
-        for i in range(0, numPoints):
-            coord = inputDataSet.GetPoint(i)
-            x0, y0 = coord[:2]
-            if x0 > 180:
-                x0 = x0 - 360
-            latPoints.append(y0)
-            lonPoints.append(x0)
-
-
-        lonPoints = np.array(lonPoints)
-        latPoints = np.array(latPoints)
-        latPoints=latPoints.reshape(y_dimension, x_dimension)
-        lonPoints=lonPoints.reshape(y_dimension, x_dimension)
-        
-        A = lonPoints[0:y_dimension,0:int(lon_indx_180 + 1)]    # [Rows, Columns]
-        B = lonPoints[0:y_dimension,int(lon_indx_180 + 1):]    # Right hand side of the dataset
-        NewLonArray = np.hstack((B,A))
-        NewLonArray = NewLonArray.reshape(y_dimension * x_dimension,)
-
-
-        ALat = latPoints[0:y_dimension,0:int(lon_indx_180)]
-        BLat = latPoints[0:y_dimension,int(lon_indx_180):]
-        NewLatArray = np.hstack((BLat, ALat))
-        NewLatArray = NewLatArray.reshape(y_dimension * x_dimension,)
-
-
-        # Take the x, y and z coordinates from the input data's vtk
-        # point array and convert them into a Robinson projection
-        # before putting the new coordinate values into a list
-        RobinsonPoints = []
-        for x0,y0 in zip(NewLonArray, NewLatArray):
-            RobinsonPoints.append((x0,y0,0))
-
-
-        # Put the Robinson projection coordinates into the empty vtk
-        # point array newPoints
-        count = 0
-        for i in RobinsonPoints:
-            newPoints.InsertNextPoint(i)
-            count += 1
-
-
-        # Loop through each of the scalar arrays in the dataset
-        # and add the array to the output dataset
-        for j in range(0, num_arrays):
-            # Convert the scalar values into a list
-            rawdat = []
-            ivals = inputDataSet.GetPointData().GetArray(j)
-            for i in range(0, numPoints):
-                rawdat.append(ivals.GetValue(i))
-
-
-            # Create a numpy array from the rawdat list and move the right
-            # half of the array (the scalar values found at longitudes
-            # greater than 180 degrees) over to the left
-            nprawdat = np.array(rawdat)
-            nprawdat=nprawdat.reshape(y_dimension, x_dimension)
-
-
-            A = nprawdat[0:y_dimension,0:int(lon_indx_180)]
-            B = nprawdat[0:y_dimension,int(lon_indx_180):]
-            NewArray = np.hstack((B,A))
-            NewArray = NewArray.reshape(y_dimension * x_dimension,)
-
-
-            # Input the values from the altered numpy array into a new vtk
-            # float array
-            dat = vtk.vtkFloatArray()
-            dat.SetName(ivals.GetName())
-            for i in NewArray:
-                dat.InsertNextValue(i)
-
-
-            ca = vtk.vtkFloatArray()
-            ca.SetName(ivals.GetName())
-            ca.SetNumberOfComponents(1)
-            ca.SetNumberOfTuples(numPoints)
-
-
-            #add the new array to the newInputDataSet
-            newInputDataSet.GetPointData().AddArray(ca)
-
-
-            #copy the values over element by element
-            for i in range(0, numPoints):
-                ca.SetValue(i, dat.GetValue(i))
-
-
-
-        newInputDataSet.SetDimensions(x_dimension,y_dimension,z_dimension)
-        newInputDataSet.SetPoints(newPoints)
-        
-        return newInputDataSet
-
-    def SplitAtLon83(self, inputDataSet):
+    def SplitAtLon(self, inputDataSet, lonVal):
         # Create the new input data set
         newInputDataSet = vtk.vtkStructuredGrid()
 
@@ -263,9 +158,9 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
             x,y = original_coord[:2]
             original_lon_points.append(x)
 
-        lon_indx_83 = self.FindIndxAtLon(original_lon_points, x_dimension,83)
+        lon_indx = self.FindIndxAtLon(original_lon_points, x_dimension, lonVal)
         # Should print 747 for the lon_indx_83
-        print("Index of the x-dimension with a longitude of 83: ", lon_indx_83)
+        print("Index of the x-dimension with a longitude of ", lonVal, ": ", lon_indx, sep ="")
 
         latPoints = []
         lonPoints = []
@@ -283,13 +178,13 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         latPoints=latPoints.reshape(y_dimension, x_dimension)
         lonPoints=lonPoints.reshape(y_dimension, x_dimension)
         
-        A = lonPoints[0:y_dimension,0:int(lon_indx_83 + 1)]    # [Rows, Columns]
-        B = lonPoints[0:y_dimension,int(lon_indx_83 + 1):]    # Right hand side of the dataset
+        A = lonPoints[0:y_dimension,0:int(lon_indx + 1)]    # [Rows, Columns]
+        B = lonPoints[0:y_dimension,int(lon_indx + 1):]    # Right hand side of the dataset
         NewLonArray = np.hstack((B,A))
         NewLonArray = NewLonArray.reshape(y_dimension * x_dimension,)
 
-        ALat = latPoints[0:y_dimension,0:int(lon_indx_83)]
-        BLat = latPoints[0:y_dimension,int(lon_indx_83):]
+        ALat = latPoints[0:y_dimension,0:int(lon_indx)]
+        BLat = latPoints[0:y_dimension,int(lon_indx):]
         NewLatArray = np.hstack((BLat, ALat))
         NewLatArray = NewLatArray.reshape(y_dimension * x_dimension,)
 
@@ -323,8 +218,8 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
             nprawdat = np.array(rawdat)
             nprawdat=nprawdat.reshape(y_dimension, x_dimension)
 
-            A = nprawdat[0:y_dimension,0:int(lon_indx_83)]
-            B = nprawdat[0:y_dimension,int(lon_indx_83):]
+            A = nprawdat[0:y_dimension,0:int(lon_indx)]
+            B = nprawdat[0:y_dimension,int(lon_indx):]
             NewArray = np.hstack((B,A))
             NewArray = NewArray.reshape(y_dimension * x_dimension,)
 
@@ -351,7 +246,166 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
         newInputDataSet.SetPoints(newPoints)
         
         return newInputDataSet
+    '''
+    # This function will take in an array and find and return one higher
+    # longitude value (as a whole degree) than the last element in the array
+    def FindNextHighestLonValue(self, arr):
+        # Get the highest value in the array arr and truncate the decimal places
+        max_whole_lon_val = math.trunc(max(arr))
 
+        # Return the truncated highest longitude value in the array plus one
+        return max_whole_lon_val + 1
+        # for some reason, returned 181, so I made it return max_whole_lon_val
+        # without the plus one for now
+        #return max_whole_lon_val
+
+    def AddColumnToEnd(self, inputDataSet):
+        # Create the new input data set
+        newInputDataSet = vtk.vtkStructuredGrid()
+
+        newPoints = vtk.vtkPoints()
+        numPoints = inputDataSet.GetNumberOfPoints()
+        print("input data Number of points", numPoints)
+
+        num_arrays = inputDataSet.GetPointData().GetNumberOfArrays()
+        print("Number of arrays:", num_arrays)
+
+        # Get the dimensions of the input dataset
+        input_dimensions = inputDataSet.GetDimensions()
+
+        print("Dimensions:")
+        print(input_dimensions[0])   # should be 1025
+        print(input_dimensions[1])   # should be 512
+        print(input_dimensions[2])   # should be 1
+        x_dimension = input_dimensions[0]
+        y_dimension = input_dimensions[1]
+        z_dimension = input_dimensions[2]
+
+        original_lon_points = []
+        for i in range(0, numPoints):
+            original_coord = inputDataSet.GetPoint(i)
+            x,y = original_coord[:2]
+            original_lon_points.append(x)
+
+        next_lon_value = self.FindNextHighestLonValue(original_lon_points)
+        # Should print 360 for the next_lon_value
+        print("Next highest longitude value: ", next_lon_value)
+
+        latPoints = []
+        lonPoints = []
+
+        for i in range(0, numPoints):
+            coord = inputDataSet.GetPoint(i)
+            x0, y0 = coord[:2]
+            latPoints.append(y0)
+            lonPoints.append(x0)
+
+        latPoints = copy.deepcopy(np.array(latPoints))
+        lonPoints = copy.deepcopy(np.array(lonPoints))
+
+        # Test out adding a column of y_dimension values of 360 degrees
+        # to my longitude array and add a copy of the first
+        # column of my latitude array to the end of the array
+
+        # Add the first column of the latitude array to the end
+        # of the latitude array
+        latPoints=latPoints.reshape(y_dimension,x_dimension)
+        ALat = copy.deepcopy(latPoints[0:y_dimension,:])
+        BLat = copy.deepcopy(latPoints[0:y_dimension,0:1])
+        NewLatArray = np.hstack((ALat, BLat))
+
+
+        latPoints=latPoints.reshape(y_dimension * x_dimension,)
+        NewLatArray=NewLatArray.reshape(y_dimension * (x_dimension + 1),)
+
+
+        # Add a column of 360 degrees to the end of my longitude
+        # array
+        #lonPoints=lonPoints.reshape(512,1024)
+        lonPoints=lonPoints.reshape(y_dimension,x_dimension)
+        #ALon = lonPoints[0:512,:]
+        #ALon = copy.deepcopy(lonPoints[0:512,:])
+        ALon = copy.deepcopy(lonPoints[0:y_dimension,:])
+        #BLon = np.full((512, 1), 360.0)
+        #BLon = np.full((y_dimension, 1), 360.0)
+        BLon = np.full((y_dimension, 1), next_lon_value)
+        NewLonArray = np.hstack((ALon, BLon))
+
+        #lonPoints=lonPoints.reshape(524288,)
+        lonPoints=lonPoints.reshape(y_dimension * x_dimension,)
+        #NewLonArray=NewLonArray.reshape(524800,)
+        NewLonArray=NewLonArray.reshape(y_dimension * (x_dimension + 1),)
+
+
+        # Check some of the points in the NewLonArray
+        #print(NewLonArray[1023])
+        #print(NewLonArray[1024])
+        print(NewLonArray[x_dimension])
+        #print(NewLonArray.shape)
+
+        #for i in range(0,numPoints):
+        #for i in range(0,524800):
+        for i in range(0,y_dimension * (x_dimension + 1)):
+            #mynewcoord = (lonPoints[i], latPoints[i], 0)
+            mynewcoord = (NewLonArray[i], NewLatArray[i], 0)
+            newPoints.InsertNextPoint(mynewcoord)
+
+
+        # Loop through each of the scalar arrays in the dataset, add the first
+        # column to the end and add the modified array to the new input dataset
+        for j in range(0, num_arrays):
+            dat = vtk.vtkFloatArray()
+            rawdat = []
+            ivals = inputDataSet.GetPointData().GetArray(j)
+            # populates rawdat list with input points
+            for i in range(0, numPoints):
+                rawdat.append(ivals.GetValue(i))
+            print("rawdat number of points", len(rawdat))
+            # Input the values from the altered numpy array into a new vtk
+            # float array
+            dat.SetName(ivals.GetName())
+            newNumPoints = 0
+            # Test out the reshape function to see if that is messing up
+            # my new input (it seems to work fine after running this code)
+            #nprawdat = np.array(rawdat)
+            nprawdat = copy.deepcopy(np.array(rawdat))
+            nprawdat=nprawdat.reshape(y_dimension,x_dimension)
+            nprawdat=nprawdat.reshape(y_dimension * x_dimension,)
+
+
+            # Test out adding a new column to my rawdat array made up of
+            # 512 ones to see if it messes up my code
+            nprawdat=nprawdat.reshape(y_dimension,x_dimension)
+            A = copy.deepcopy(nprawdat[0:y_dimension,:])
+            B = nprawdat[0:y_dimension,0:1]
+            newnprawdat = np.hstack((A, B))
+
+
+            nprawdat=nprawdat.reshape(y_dimension * x_dimension,)
+            newnprawdat=newnprawdat.reshape(y_dimension * (x_dimension + 1),)
+
+            # populate newpoints vtkFloatArray
+            for i in newnprawdat:
+                dat.InsertNextValue(i)
+
+            # Add the array to the new input dataset
+            newInputDataSet.GetPointData().AddArray(dat)
+
+
+        # Check some of the points in the vtk point array
+        #print(newPoints.GetPoint(1024))
+        print(newPoints.GetPoint(x_dimension))
+        #print(newPoints.GetPoint(524799))
+
+
+        #newInputDataSet.GetPointData().AddArray(dat)
+        #newInputDataSet.SetDimensions(1024,512,1)
+        #newInputDataSet.SetDimensions(1025,512,1)
+        newInputDataSet.SetDimensions((x_dimension + 1),y_dimension,z_dimension)
+        newInputDataSet.SetPoints(newPoints)
+
+        return newInputDataSet
+    '''
     def GetProjString(self):
         projString = ""
         if (self.projection == "Robinson"):
@@ -447,16 +501,19 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
             #wholeInputDataSet = self.CenterAtZero(inputDataSet1)
             #inputDataSet0 = self.GetHemisphere("northern", wholeInputDataSet) 
         if ((self.GetCentralMeridian() == True) and (self.projection == "Northern Hemisphere Stereographic")):
-            wholeInputDataSet = self.CenterAtZero(inputDataSet1)
+            #wholeInputDataSet = self.CenterAtZero(inputDataSet1)
+            wholeInputDataSet = self.SplitAtLon(inputDataSet1,180)
             inputDataSet0 = self.GetHemisphere("northern", wholeInputDataSet) 
         elif (self.projection == "Lambert Conformal Conic"):
-            wholeInputDataSet = self.SplitAtLon83(inputDataSet1)
+            wholeInputDataSet = self.SplitAtLon(inputDataSet1,83)
             inputDataSet0 = self.GetHemisphere("northern", wholeInputDataSet) 
         elif ((self.GetCentralMeridian() == True) and (self.projection == "Southern Hemisphere Stereographic")):
-            wholeInputDataSet = self.CenterAtZero(inputDataSet1)
+            #wholeInputDataSet = self.CenterAtZero(inputDataSet1)
+            wholeInputDataSet = self.SplitAtLon(inputDataSet1,180)
             inputDataSet0 = self.GetHemisphere("southern", wholeInputDataSet) 
         elif (self.GetCentralMeridian() == True):
-            inputDataSet0 = self.CenterAtZero(inputDataSet1)
+            #inputDataSet0 = self.CenterAtZero(inputDataSet1)
+            inputDataSet0 = self.SplitAtLon(inputDataSet1,180)
         #elif ((self.projection == "Northern Hemisphere Stereographic") or (self.projection == "Lambert Conformal Conic")):
             #inputDataSet0 = self.GetHemisphere("northern", inputDataSet1) 
         elif (self.projection == "Northern Hemisphere Stereographic"):
@@ -465,7 +522,12 @@ class VTStoRobinsonVTS(VTKPythonAlgorithmBase):
             inputDataSet0 = self.GetHemisphere("southern", inputDataSet1) 
         else:
             inputDataSet0 = inputDataSet1
-
+        '''
+        if (self.GetColumnAtEnd() == True):
+            inputDataSet0 = self.AddColumnToEnd(inputDataSet2)
+        else:
+            inputDataSet0 = inputDataSet2
+        '''
         # Get the dimensions of the input dataset
         input_dimensions = inputDataSet0.GetDimensions()
 
