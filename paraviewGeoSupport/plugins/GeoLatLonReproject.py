@@ -42,6 +42,9 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         # Set the default projection value to an empty string
         self.projection = ""
 
+        # Set the default availableArrays value to an empty string
+        self._availableArrays = ""
+
         # Create a list of common map projections to choose from
         self._mapProjectionList = ["Robinson", "Mercator", "Northern Hemisphere Stereographic", "Southern Hemisphere Stereographic", "Lambert Conformal Conic", "Sphere"]
 
@@ -246,7 +249,7 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         newInputDataSet.SetPoints(newPoints)
         
         return newInputDataSet
-    '''
+    
     # This function will take in an array and find and return one higher
     # longitude value (as a whole degree) than the last element in the array
     def FindNextHighestLonValue(self, arr):
@@ -287,7 +290,8 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
             x,y = original_coord[:2]
             original_lon_points.append(x)
 
-        next_lon_value = self.FindNextHighestLonValue(original_lon_points)
+        #next_lon_value = self.FindNextHighestLonValue(original_lon_points)
+        next_lon_value = original_lon_points[0]
         # Should print 360 for the next_lon_value
         print("Next highest longitude value: ", next_lon_value)
 
@@ -405,7 +409,7 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         newInputDataSet.SetPoints(newPoints)
 
         return newInputDataSet
-    '''
+    
     def GetProjString(self):
         projString = ""
         if (self.projection == "Robinson"):
@@ -503,31 +507,31 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         if ((self.GetCentralMeridian() == True) and (self.projection == "Northern Hemisphere Stereographic")):
             #wholeInputDataSet = self.CenterAtZero(inputDataSet1)
             wholeInputDataSet = self.SplitAtLon(inputDataSet1,180)
-            inputDataSet0 = self.GetHemisphere("northern", wholeInputDataSet) 
+            inputDataSet2 = self.GetHemisphere("northern", wholeInputDataSet) 
         elif (self.projection == "Lambert Conformal Conic"):
             wholeInputDataSet = self.SplitAtLon(inputDataSet1,83)
-            inputDataSet0 = self.GetHemisphere("northern", wholeInputDataSet) 
+            inputDataSet2 = self.GetHemisphere("northern", wholeInputDataSet) 
         elif ((self.GetCentralMeridian() == True) and (self.projection == "Southern Hemisphere Stereographic")):
             #wholeInputDataSet = self.CenterAtZero(inputDataSet1)
             wholeInputDataSet = self.SplitAtLon(inputDataSet1,180)
-            inputDataSet0 = self.GetHemisphere("southern", wholeInputDataSet) 
+            inputDataSet2 = self.GetHemisphere("southern", wholeInputDataSet) 
         elif (self.GetCentralMeridian() == True):
             #inputDataSet0 = self.CenterAtZero(inputDataSet1)
-            inputDataSet0 = self.SplitAtLon(inputDataSet1,180)
+            inputDataSet2 = self.SplitAtLon(inputDataSet1,180)
         #elif ((self.projection == "Northern Hemisphere Stereographic") or (self.projection == "Lambert Conformal Conic")):
             #inputDataSet0 = self.GetHemisphere("northern", inputDataSet1) 
         elif (self.projection == "Northern Hemisphere Stereographic"):
-            inputDataSet0 = self.GetHemisphere("northern", inputDataSet1) 
+            inputDataSet2 = self.GetHemisphere("northern", inputDataSet1) 
         elif (self.projection == "Southern Hemisphere Stereographic"):
-            inputDataSet0 = self.GetHemisphere("southern", inputDataSet1) 
+            inputDataSet2 = self.GetHemisphere("southern", inputDataSet1) 
         else:
-            inputDataSet0 = inputDataSet1
-        '''
+            inputDataSet2 = inputDataSet1
+        
         if (self.GetColumnAtEnd() == True):
             inputDataSet0 = self.AddColumnToEnd(inputDataSet2)
         else:
             inputDataSet0 = inputDataSet2
-        '''
+        
         # Get the dimensions of the input dataset
         input_dimensions = inputDataSet0.GetDimensions()
 
@@ -572,7 +576,7 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         # and then transform those points into a Robinson projection and
         # put them in newPoints
         oldPointsArray = inputDataSet0.GetPoints()
-        if (((self.projection == "Robinson") or (self.projection == "Mercator") or (self.projection == "Sphere")) and (self.GetCentralMeridian() != True)):
+        if (((self.projection == "Robinson") or (self.projection == "Mercator") or (self.projection == "Sphere")) and (self.GetCentralMeridian() != True) and (self.GetColumnAtEnd() != True)):
             oldPoints = inputDataSet0.VTKObject.GetPoints()
         else:
             oldPoints = inputDataSet0.GetPoints()
@@ -654,3 +658,47 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         
 
         return 1
+
+    def RequestInformation(self, request, inInfo, outInfo):
+        print("I am running RequestInformation")
+
+        # get the first input
+        inputDataSet0 = dsa.WrapDataObject(vtkDataSet.GetData(inInfo[0]))
+
+        # Get the list of array names from the input data set and assign that list to the
+        # availableArrays variable
+        num_arrays = inputDataSet0.GetPointData().GetNumberOfArrays()
+
+        # Create a list of the array names inside of the input data set
+        array_list = []
+        for i in range(num_arrays):
+            array_name = inputDataSet0.GetPointData().GetArray(i).GetName()
+            array_list.append(array_name)
+        self._availableArrays = array_list
+
+        # Get the dimensions of the input data set
+        inputData = dsa.WrapDataObject(vtkDataSet.GetData(inInfo[0]))
+        input_dimensions = inputData.GetDimensions()
+        x_dimension = input_dimensions[0]
+        y_dimension = input_dimensions[1]
+        z_dimension = input_dimensions[2]
+
+        executive = self.GetExecutive()
+        outInfo = executive.GetOutputInformation(0)
+        outInfo.Set(executive.WHOLE_EXTENT(), 0, x_dimension, 0, (y_dimension - 1), 0, 0)
+        return 1
+
+    def RequestUpdateExtent(self, request, inInfo, outInfo):
+        print("I am running RequestUpdateExtent")
+
+        # Get the dimensions of the input data set
+        inputData = dsa.WrapDataObject(vtkDataSet.GetData(inInfo[0]))
+        input_dimensions = inputData.GetDimensions()
+        x_dimension = input_dimensions[0]
+        y_dimension = input_dimensions[1]
+        z_dimension = input_dimensions[2]
+
+        executive = self.GetExecutive()
+        inInfo = executive.GetInputInformation(0, 0)
+        inInfo.Set(executive.UPDATE_EXTENT(), 0, (x_dimension - 1), 0, (y_dimension - 1), 0, 0)
+        return 1 
