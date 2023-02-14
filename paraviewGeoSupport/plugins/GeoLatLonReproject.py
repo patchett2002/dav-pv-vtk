@@ -290,7 +290,8 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
             x,y = original_coord[:2]
             original_lon_points.append(x)
 
-        next_lon_value = self.FindNextHighestLonValue(original_lon_points)
+        #next_lon_value = self.FindNextHighestLonValue(original_lon_points)
+        next_lon_value = original_lon_points[0]
         # Should print 360 for the next_lon_value
         print("Next highest longitude value: ", next_lon_value)
 
