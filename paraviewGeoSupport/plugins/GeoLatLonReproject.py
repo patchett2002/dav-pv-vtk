@@ -21,15 +21,6 @@ import numpy as np #needed for interpolation and pi
 @smproperty.input(name="Input")
 class GeoLatLonReproject(VTKPythonAlgorithmBase):
 
-    # Arrays for interpolating Robinson Coordinates
-    degrees=[0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90]
-    X=[1,0.9986,0.9954,0.99,0.9822,0.973,0.96,0.9427,0.9216,0.8962,\
-   
-       0.8679,0.835,0.7986,0.7597,0.7186,0.6732,0.6213,0.5722,0.5322]
-    Y=[0,0.062,0.124,0.186,0.248,0.31,0.372,0.434,0.4958,0.5571,0.6176,\
-   
-       0.6769,0.7346,0.7903,0.8435,0.8936,0.9394,0.9761,1]
-
     def __init__(self):
         VTKPythonAlgorithmBase.__init__(self, nInputPorts=1, nOutputPorts=1)
 
@@ -494,6 +485,11 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         print("Number of arrays:", num_arrays)
         
         print("Real Meridian: ", self.GetCentralMeridian())
+
+        # If the user chooses the Robinson, Mercator or Lambert Conformal Conic projection,
+        # then set the columnAtEnd variable to zero
+        if (((self.projection == "Robinson") or (self.projection == "Mercator") or (self.projection == "Lambert Conformal Conic"))):
+             self.columnAtEnd = 0
 
         # Check that the Central Meridian At Zero checkbox is checked, and if it
         # is, then alter the input data set so that it is centered at zero
