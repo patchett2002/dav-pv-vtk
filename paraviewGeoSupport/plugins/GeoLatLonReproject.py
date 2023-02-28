@@ -2,7 +2,6 @@ from vtkmodules.vtkCommonDataModel import vtkDataSet
 from vtkmodules.util.vtkAlgorithm import VTKPythonAlgorithmBase
 from vtkmodules.numpy_interface import dataset_adapter as dsa
 from vtkmodules.vtkGeovisCore import vtkGeoProjection, vtkGeoTransform
-from pyproj import CRS
 from pyproj import Transformer
 
 import pyproj
@@ -38,6 +37,9 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
 
         # Create a list of common map projections to choose from
         self._mapProjectionList = ["Robinson", "Mercator", "Northern Hemisphere Stereographic", "Southern Hemisphere Stereographic", "Lambert Conformal Conic", "Sphere"]
+        
+        # Set the default sphereRadius value to 0
+        #self.sphereRadius = 0
 
     def FillInputPortInformation(self, port, info):
         info.Set(vtk.vtkAlgorithm.INPUT_REQUIRED_DATA_TYPE(), "vtkDataSet")
@@ -46,6 +48,9 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
     def FillOutputPortInformation(self, port, info):
         info.Set(vtk.vtkDataObject.DATA_TYPE_NAME(), "vtkStructuredGrid")
         return 1
+
+    #@smproperty.doublevector(name="SphereRadiusValue", information_only="1")
+    #def
 
     @smproperty.stringvector(name="AvailableMapProjections", information_only="1")
     def GetAvailableProjections(self):
@@ -63,11 +68,11 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         </IntVectorProperty>""")
     def SetColumnAtEnd(self, x):
         self.columnAtEnd = x
-        print("Set Column At End: ", self.columnAtEnd)
+        #print("Set Column At End: ", self.columnAtEnd)
         self.Modified()
 
     def GetColumnAtEnd(self):
-        print("Get Column At End: ", self.columnAtEnd)
+        #print("Get Column At End: ", self.columnAtEnd)
         return self.columnAtEnd
 
     @smproperty.stringvector(name="MapProjections", number_of_elements="1")
@@ -80,19 +85,17 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         </StringListDomain>
         """)
     def SetProj(self, val):
-        print("Setting ", val)
+        #print("Setting ", val)
         self.projection = val
         self.Modified()
 
-    #@smproperty.intvector(name="PhiResolution", default_values=0)
-    #@smdomain.intrange(min=0, max=1)
     @smproperty.xml("""
         <IntVectorProperty name="CentralMeridianAtZero"
             number_of_elements="1"
             default_values="0"
             command="SetCentralMeridian">
             <BooleanDomain name="bool" />
-            <Documentation>If on, sets the central meridian of the Robinson
+            <Documentation>If on, sets the central meridian of the map
             projection to zero degrees longitude.</Documentation>
         </IntVectorProperty>""")
     def SetCentralMeridian(self, x):
@@ -122,7 +125,7 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         numPoints = inputDataSet.GetNumberOfPoints()
 
         num_arrays = inputDataSet.GetPointData().GetNumberOfArrays()
-        print("Number of arrays:", num_arrays)
+        #print("Number of arrays:", num_arrays)
 
         # Get the dimensions of the input dataset
         input_dimensions = inputDataSet.GetDimensions()
@@ -133,15 +136,15 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         numPoints = inputDataSet.GetNumberOfPoints()
 
         num_arrays = inputDataSet.GetPointData().GetNumberOfArrays()
-        print("Number of arrays:", num_arrays)
+        #print("Number of arrays:", num_arrays)
 
         # Get the dimensions of the input dataset
         input_dimensions = inputDataSet.GetDimensions()
 
-        print("Dimensions:")
-        print(input_dimensions[0])   # should be 1025
-        print(input_dimensions[1])   # should be 512
-        print(input_dimensions[2])   # should be 1
+        #print("Dimensions:")
+        #print(input_dimensions[0])   # should be 1025
+        #print(input_dimensions[1])   # should be 512
+        #print(input_dimensions[2])   # should be 1
         x_dimension = input_dimensions[0]
         y_dimension = input_dimensions[1]
         z_dimension = input_dimensions[2]
@@ -153,8 +156,7 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
             original_lon_points.append(x)
 
         lon_indx = self.FindIndxAtLon(original_lon_points, x_dimension, lonVal)
-        # Should print 747 for the lon_indx_83
-        print("Index of the x-dimension with a longitude of ", lonVal, ": ", lon_indx, sep ="")
+        #print("Index of the x-dimension with a longitude of ", lonVal, ": ", lon_indx, sep ="")
 
         latPoints = []
         lonPoints = []
@@ -249,9 +251,6 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
 
         # Return the truncated highest longitude value in the array plus one
         return max_whole_lon_val + 1
-        # for some reason, returned 181, so I made it return max_whole_lon_val
-        # without the plus one for now
-        #return max_whole_lon_val
 
     def AddColumnToEnd(self, inputDataSet):
         # Create the new input data set
@@ -259,18 +258,18 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
 
         newPoints = vtk.vtkPoints()
         numPoints = inputDataSet.GetNumberOfPoints()
-        print("input data Number of points", numPoints)
+        #print("input data Number of points", numPoints)
 
         num_arrays = inputDataSet.GetPointData().GetNumberOfArrays()
-        print("Number of arrays:", num_arrays)
+        #print("Number of arrays:", num_arrays)
 
         # Get the dimensions of the input dataset
         input_dimensions = inputDataSet.GetDimensions()
 
-        print("Dimensions:")
-        print(input_dimensions[0])   # should be 1025
-        print(input_dimensions[1])   # should be 512
-        print(input_dimensions[2])   # should be 1
+        #print("Dimensions:")
+        #print(input_dimensions[0])   # should be 1025
+        #print(input_dimensions[1])   # should be 512
+        #print(input_dimensions[2])   # should be 1
         x_dimension = input_dimensions[0]
         y_dimension = input_dimensions[1]
         z_dimension = input_dimensions[2]
@@ -283,8 +282,7 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
 
         #next_lon_value = self.FindNextHighestLonValue(original_lon_points)
         next_lon_value = original_lon_points[0]
-        # Should print 360 for the next_lon_value
-        print("Next highest longitude value: ", next_lon_value)
+        #print("Next highest longitude value: ", next_lon_value)
 
         latPoints = []
         lonPoints = []
@@ -316,32 +314,20 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
 
         # Add a column of 360 degrees to the end of my longitude
         # array
-        #lonPoints=lonPoints.reshape(512,1024)
         lonPoints=lonPoints.reshape(y_dimension,x_dimension)
-        #ALon = lonPoints[0:512,:]
-        #ALon = copy.deepcopy(lonPoints[0:512,:])
         ALon = copy.deepcopy(lonPoints[0:y_dimension,:])
-        #BLon = np.full((512, 1), 360.0)
-        #BLon = np.full((y_dimension, 1), 360.0)
         BLon = np.full((y_dimension, 1), next_lon_value)
         NewLonArray = np.hstack((ALon, BLon))
 
-        #lonPoints=lonPoints.reshape(524288,)
         lonPoints=lonPoints.reshape(y_dimension * x_dimension,)
-        #NewLonArray=NewLonArray.reshape(524800,)
         NewLonArray=NewLonArray.reshape(y_dimension * (x_dimension + 1),)
 
 
         # Check some of the points in the NewLonArray
-        #print(NewLonArray[1023])
-        #print(NewLonArray[1024])
-        print(NewLonArray[x_dimension])
+        #print(NewLonArray[x_dimension])
         #print(NewLonArray.shape)
 
-        #for i in range(0,numPoints):
-        #for i in range(0,524800):
         for i in range(0,y_dimension * (x_dimension + 1)):
-            #mynewcoord = (lonPoints[i], latPoints[i], 0)
             mynewcoord = (NewLonArray[i], NewLatArray[i], 0)
             newPoints.InsertNextPoint(mynewcoord)
 
@@ -355,14 +341,13 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
             # populates rawdat list with input points
             for i in range(0, numPoints):
                 rawdat.append(ivals.GetValue(i))
-            print("rawdat number of points", len(rawdat))
+            #print("rawdat number of points", len(rawdat))
             # Input the values from the altered numpy array into a new vtk
             # float array
             dat.SetName(ivals.GetName())
             newNumPoints = 0
             # Test out the reshape function to see if that is messing up
             # my new input (it seems to work fine after running this code)
-            #nprawdat = np.array(rawdat)
             nprawdat = copy.deepcopy(np.array(rawdat))
             nprawdat=nprawdat.reshape(y_dimension,x_dimension)
             nprawdat=nprawdat.reshape(y_dimension * x_dimension,)
@@ -388,14 +373,9 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
 
 
         # Check some of the points in the vtk point array
-        #print(newPoints.GetPoint(1024))
-        print(newPoints.GetPoint(x_dimension))
-        #print(newPoints.GetPoint(524799))
+        #print(newPoints.GetPoint(x_dimension))
 
 
-        #newInputDataSet.GetPointData().AddArray(dat)
-        #newInputDataSet.SetDimensions(1024,512,1)
-        #newInputDataSet.SetDimensions(1025,512,1)
         newInputDataSet.SetDimensions((x_dimension + 1),y_dimension,z_dimension)
         newInputDataSet.SetPoints(newPoints)
 
@@ -475,6 +455,22 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         hemisphereData.SetPoints(hemisphereDataPts)
         return hemisphereData
 
+    # This function will take in a vtk data set and return a vtk points array of the
+    # points found inside the data set
+    def GetPoints(self, vtkDataSet):
+        vtkPts = vtk.vtkPoints()
+        try:
+            vtkPts = vtkDataSet.GetPoints()
+        except:
+            print("The data set is not a vtk structured grid")
+            numPoints = vtkDataSet.GetNumberOfPoints()
+            for i in range(numPoints):
+                point = vtkDataSet.GetPoint(i)
+                x, y, z = point[:3]
+                vtkPts.InsertPoint(i,x,y,z)
+        
+        return vtkPts
+
     def RequestData(self, request, inInfo, outInfo):
         # get the first input.
         inputDataSet1 = dsa.WrapDataObject(vtkDataSet.GetData(inInfo[0]))
@@ -482,9 +478,9 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         newPoints = vtk.vtkPoints()
         
         num_arrays = inputDataSet1.GetPointData().GetNumberOfArrays()
-        print("Number of arrays:", num_arrays)
+        #print("Number of arrays:", num_arrays)
         
-        print("Real Meridian: ", self.GetCentralMeridian())
+        #print("Real Meridian: ", self.GetCentralMeridian())
 
         # If the user chooses the Robinson, Mercator or Lambert Conformal Conic projection,
         # then set the columnAtEnd variable to zero
@@ -497,25 +493,17 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         # conformal conic or a stereographic projection, and if it is one of
         # those projections, then alter the input data set to only include one
         # hemisphere.
-        #if ((self.GetCentralMeridian() == True) and ((self.projection == "Northern Hemisphere Stereographic") or (self.projection == "Lambert Conformal Conic"))):
-            #wholeInputDataSet = self.CenterAtZero(inputDataSet1)
-            #inputDataSet0 = self.GetHemisphere("northern", wholeInputDataSet) 
         if ((self.GetCentralMeridian() == True) and (self.projection == "Northern Hemisphere Stereographic")):
-            #wholeInputDataSet = self.CenterAtZero(inputDataSet1)
             wholeInputDataSet = self.SplitAtLon(inputDataSet1,180)
             inputDataSet2 = self.GetHemisphere("northern", wholeInputDataSet) 
         elif (self.projection == "Lambert Conformal Conic"):
             wholeInputDataSet = self.SplitAtLon(inputDataSet1,83)
             inputDataSet2 = self.GetHemisphere("northern", wholeInputDataSet) 
         elif ((self.GetCentralMeridian() == True) and (self.projection == "Southern Hemisphere Stereographic")):
-            #wholeInputDataSet = self.CenterAtZero(inputDataSet1)
             wholeInputDataSet = self.SplitAtLon(inputDataSet1,180)
             inputDataSet2 = self.GetHemisphere("southern", wholeInputDataSet) 
         elif (self.GetCentralMeridian() == True):
-            #inputDataSet0 = self.CenterAtZero(inputDataSet1)
             inputDataSet2 = self.SplitAtLon(inputDataSet1,180)
-        #elif ((self.projection == "Northern Hemisphere Stereographic") or (self.projection == "Lambert Conformal Conic")):
-            #inputDataSet0 = self.GetHemisphere("northern", inputDataSet1) 
         elif (self.projection == "Northern Hemisphere Stereographic"):
             inputDataSet2 = self.GetHemisphere("northern", inputDataSet1) 
         elif (self.projection == "Southern Hemisphere Stereographic"):
@@ -531,10 +519,10 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         # Get the dimensions of the input dataset
         input_dimensions = inputDataSet0.GetDimensions()
 
-        print("Dimensions:")
-        print(input_dimensions[0])   # should be 1025
-        print(input_dimensions[1])   # should be 512
-        print(input_dimensions[2])   # should be 1
+        #print("Dimensions:")
+        #print(input_dimensions[0])   # should be 1025
+        #print(input_dimensions[1])   # should be 512
+        #print(input_dimensions[2])   # should be 1
 
         x_dimension = input_dimensions[0]
         y_dimension = input_dimensions[1]
@@ -571,12 +559,15 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         # populate oldPoints with the original points of the inputDataSet
         # and then transform those points into a Robinson projection and
         # put them in newPoints
-        oldPointsArray = inputDataSet0.GetPoints()
+        #oldPointsArray = inputDataSet0.GetPoints()
+        oldPointsArray = self.GetPoints(inputDataSet0)
         if (((self.projection == "Robinson") or (self.projection == "Mercator") or (self.projection == "Sphere")) and (self.GetCentralMeridian() != True) and (self.GetColumnAtEnd() != True)):
-            oldPoints = inputDataSet0.VTKObject.GetPoints()
+            #oldPoints = inputDataSet0.VTKObject.GetPoints()
+            oldPoints = self.GetPoints(inputDataSet0.VTKObject)
         else:
-            oldPoints = inputDataSet0.GetPoints()
-        print(oldPoints)
+            #oldPoints = inputDataSet0.GetPoints()
+            oldPoints = self.GetPoints(inputDataSet0)
+        #print(oldPoints)
 
         # If the projection is set to Sphere, then loop through each point one
         # at a time to convert the coordinates.
@@ -601,8 +592,6 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
         else:
             geo.TransformPoints(oldPoints, newPoints)
         '''
-
-        #geo.TransformPoints(oldPoints, newPoints)
         
         if (self.projection == "Sphere"):
             transproj = Transformer.from_crs({'proj':'latlong', 'ellps':'WGS84', 'datum':'WGS84'}, {'proj':'geocent', 'ellps':'WGS84', 'datum':'WGS84'}, always_xy=True)
@@ -632,9 +621,9 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
             ca.SetNumberOfTuples(numPoints)
 
             # Print out the number of points
-            print("Number of points: ", newPoints.GetNumberOfPoints())
+            #print("Number of points: ", newPoints.GetNumberOfPoints())
 
-            print("Output data set: ", outputDataSet)
+            #print("Output data set: ", outputDataSet)
 
             #add the new array to the output
             outputDataSet.GetPointData().AddArray(ca)
@@ -644,19 +633,19 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
                 ca.SetValue(i, ivals.GetValue(i))
 
             # Try printing out the value at the 1025th point
-            print("Value at point 1024: ", ivals.GetValue(1024))
-            print("Value at point 1024 in ca: ", ca.GetValue(1024))
+            #print("Value at point 1024: ", ivals.GetValue(1024))
+            #print("Value at point 1024 in ca: ", ca.GetValue(1024))
 
         outputDataSet.SetDimensions(x_dimension,y_dimension,z_dimension)
         outputDataSet.SetPoints(newPoints)
 
-        print(outputDataSet)
+        #print(outputDataSet)
         
 
         return 1
 
     def RequestInformation(self, request, inInfo, outInfo):
-        print("I am running RequestInformation")
+        #print("I am running RequestInformation")
 
         # get the first input
         inputDataSet0 = dsa.WrapDataObject(vtkDataSet.GetData(inInfo[0]))
@@ -681,11 +670,11 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
 
         executive = self.GetExecutive()
         outInfo = executive.GetOutputInformation(0)
-        outInfo.Set(executive.WHOLE_EXTENT(), 0, x_dimension, 0, (y_dimension - 1), 0, 0)
+        outInfo.Set(executive.WHOLE_EXTENT(), 0, x_dimension, 0, (y_dimension - 1), 0, (z_dimension - 1))
         return 1
 
     def RequestUpdateExtent(self, request, inInfo, outInfo):
-        print("I am running RequestUpdateExtent")
+        #print("I am running RequestUpdateExtent")
 
         # Get the dimensions of the input data set
         inputData = dsa.WrapDataObject(vtkDataSet.GetData(inInfo[0]))
@@ -696,5 +685,5 @@ class GeoLatLonReproject(VTKPythonAlgorithmBase):
 
         executive = self.GetExecutive()
         inInfo = executive.GetInputInformation(0, 0)
-        inInfo.Set(executive.UPDATE_EXTENT(), 0, (x_dimension - 1), 0, (y_dimension - 1), 0, 0)
+        inInfo.Set(executive.UPDATE_EXTENT(), 0, (x_dimension - 1), 0, (y_dimension - 1), 0, (z_dimension - 1))
         return 1 
